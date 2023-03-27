@@ -10,18 +10,17 @@ import CannonDebugger from 'cannon-es-debugger'
 // vars /-/-/-/-/-/-/-/
 let helvetikerFont, loraFont, spaceMonoFont, fontsLoaded
 let world, defaultMaterial, defaultContactMaterial, stonePhysMaterial, stoneContactMaterial, cannonDebugger
+let activeCamera
 let minX, maxX, minY, maxY  //Stores the min and max X and Y world postions of the edges of the screen
-let serialConnected = false
 
 const fontsToLoad = 3
 
-//var cannonDebugEnabled = true
-//var typeInput = true
 var useOrtho = true
 var fontLoadFlag = false
 
 const objectsToUpdate = []
 const fonts = []
+const letters  = []
 
 const sizes = { width: window.innerWidth, height: window.innerHeight}
 const aspectRatio = sizes.width / sizes.height
@@ -35,11 +34,8 @@ const parameters = {
     earthquake: () => {
         earthquake()
     },
-    randomFont: () => {
-        randomiseLetterFont()
-    },
-    connectSerial: () => {
-        clickConnectSerial()
+    randomise: () => {
+        resetAll()
     },
     connectWebUSB: () => {
         clickConnectWebUSB()
@@ -54,8 +50,6 @@ const parameters = {
     earthquakeForce: 5,
     gravityLimit: 1
 }
-
-const xPositions = [-1, -0.8, -0.6, -0.4, -0.2, 0, 0.2, 0.4, 0.6, 0.8, 1]
 
 const colours = [
     new THREE.Color(0x354544),  // grey green
@@ -81,6 +75,8 @@ const bgColours = [
     new THREE.Color(0x1B273F)
 ]
 
+const xPositions = [-1, -0.8, -0.6, -0.4, -0.2, 0, 0.2, 0.4, 0.6, 0.8, 1]   //List of x positions to cycle through when spawning letters with type input
+
 // render /-/-/-/-/-/-/-/
 
 const canvas = document.querySelector('canvas.webgl')
@@ -96,21 +92,15 @@ renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2))
 // scene and cameras /-/-/-/-/-/-/-/
 
 const scene = new THREE.Scene()
-var col = randomBackgroundColour()
-scene.background = col
+scene.background = getRandomBGColour()
 
 const orthoCamera = new THREE.OrthographicCamera(-1 * aspectRatio, 1 * aspectRatio, 1, -1, 0.1, 2)
 scene.add(orthoCamera)
 orthoCamera.position.set(0, 0, 1)
-//orthoCamera.lookAt(0,0,0)
-const orthoHelper = new THREE.CameraHelper(orthoCamera)
-//scene.add(orthoHelper)
 
 const perspectiveCamera = new THREE.PerspectiveCamera(75, sizes.width / sizes.height, 0.1, 100)
 perspectiveCamera.position.set(- 3, 5, 3)
 scene.add(perspectiveCamera)
-
-var activeCamera
 
 if(useOrtho) activeCamera = orthoCamera
 else activeCamera = perspectiveCamera
@@ -122,18 +112,10 @@ controls.enableDamping = true
 const ambientLight = new THREE.AmbientLight(0xffffff, 0.7)
 scene.add(ambientLight)
 
-const axesHelper = new THREE.AxesHelper()
-axesHelper.position.y = 0.01
-//scene.add(axesHelper)
-//scene.background = new THREE.Color(0xffffff)
-
-// materialss /-/-/-/-/-/-/-/
-const mat = new THREE.MeshPhongMaterial({color: 0xff0000})
-const normalMat = new THREE.MeshNormalMaterial()
-
 // loaders /-/-/-/-/-/-/-/
 const fontLoader = new FontLoader()
-var letters  = []
+
+const mat = new THREE.MeshBasicMaterial({ color: colours[2] })
 
 // init calls /-/-/-/-/-/-/-/
 initPhysics()
@@ -159,13 +141,13 @@ const gui = new dat.GUI()
 
 gui.add(parameters, 'earthquake')
 gui.add(parameters, 'toggleCam')
-gui.add(parameters, 'randomFont')
+gui.add(parameters, 'randomise')
 gui.add(parameters, "connectWebUSB")
 gui.add(parameters, "sendWebUSB")
 gui.add(parameters, 'cannonDebugEnabled')
 gui.add(parameters, 'typeInput')
-gui.add(parameters, 'mouseGravity')
-gui.add(parameters, 'MBGravity')
+gui.add(parameters, 'mouseGravity').onChange( function(){setGravity(0,-1)})  // reset the gravity to default when toggled
+gui.add(parameters, 'MBGravity').onChange( function(){setGravity(0,-1)})
 gui.add(parameters, 'earthquakeForce').min(0).max(10).step(1)
 gui.add(parameters, 'gravityLimit').min(0).max(10).step(1)
 
@@ -174,7 +156,7 @@ function initPhysics(){
     world = new CANNON.World()
     world.broadphase = new CANNON.SAPBroadphase(world)
     world.allowSleep = true
-    setGravity(0, -1)
+    setGravity(0, 0)
 
     defaultMaterial = new CANNON.Material('default')
     defaultContactMaterial = new CANNON.ContactMaterial(
@@ -203,13 +185,14 @@ function initPhysics(){
 
 function onFontsLoaded(){
     if(!parameters.typeInput){
-        createLetter("P", randomFont(), new THREE.Vector3(-1.2, 0, 0))
-        createLetter("h", randomFont(), new THREE.Vector3(0, 0, 0))
-        createLetter("o", randomFont(), new THREE.Vector3(0.2, 0, 0))
-        createLetter("e", randomFont(), new THREE.Vector3(0.2, 0, 0))
-        createLetter("n", randomFont(), new THREE.Vector3(0.2, 0, 0))
-        createLetter("i", randomFont(), new THREE.Vector3(0.2, 0, 0))
-        createLetter("x", randomFont(), new THREE.Vector3(0.2, 0, 0))
+        createLetter("P", getRandomFont(), new THREE.Vector3(-1.2, 0, 0))
+        createLetter("h", getRandomFont(), new THREE.Vector3(0, 0, 0))
+        createLetter("o", getRandomFont(), new THREE.Vector3(0.2, 0, 0))
+        createLetter("e", getRandomFont(), new THREE.Vector3(0.2, 0, 0))
+        createLetter("n", getRandomFont(), new THREE.Vector3(0.2, 0, 0))
+        createLetter("i", getRandomFont(), new THREE.Vector3(0.2, 0, 0))
+        createLetter("x", getRandomFont(), new THREE.Vector3(0.2, 0, 0))
+
     }
 }
 
@@ -264,21 +247,18 @@ function createLetter(textString, font, position){
     textGeometry.computeBoundingBox()
     textGeometry.center()
 
-    const mat = new THREE.MeshBasicMaterial( { color: randomColour() })
+    const mat = new THREE.MeshBasicMaterial( { color: getRandomColour() })
     
     const mesh = new THREE.Mesh(textGeometry, mat)
     mesh.name = textString + "_letter"
-    //mesh.position.copy(position)
     mesh.position.x = xPositions[letterSpawnCount]
-    //mesh.position.y = 0.7
     letters.push(mesh)
     scene.add(mesh)
 
     var start = new THREE.Vector3()
     start.copy(mesh.position)
     mesh.userData = { letter: textString, startPos: start }
-    //if(textString == "P") console.log(mesh)
-
+ 
     letterSpawnCount++
     if(letterSpawnCount > xPositions.length) letterSpawnCount = 0
     
@@ -299,6 +279,8 @@ function createLetter(textString, font, position){
     body.position.copy(mesh.position)
     world.addBody(body)
     objectsToUpdate.push({ mesh, body })
+
+    body.addEventListener('collide', edgeCollision)
 }
 
 // function to create each letter, 
@@ -310,45 +292,13 @@ function createP(font){
      
 }
 
-function randomiseLetterFont(){
-    letters.forEach(element => {
-
-        let newGeo = new TextGeometry(
-            element.userData.letter,
-            {
-                font: randomFont(),
-                size: 0.35,
-                height: 0.02,
-                curveSegments: 12,
-                bevelEnabled: true,
-                bevelThickness: 0.001,
-                bevelSize: 0.002,
-                bevelOffset: 0,
-                bevelSegments: 5
-            }
-        )
-        newGeo.computeBoundingBox()
-        newGeo.center()
-        
-        element.geometry.dispose()
-        element.geometry = newGeo
-    });
-}
-
-function randomiseLetterColour(){
-    letters.forEach(element => {
-        let newMat = new THREE.MeshBasicMaterial( { color: randomColour() })
-
-        element.material.dispose()
-        element.material = newMat
-    });
-}
+var offset = 0  //offset the edges from the edge of the screen. positive value (0.2) = gap between screen edge and box edge
 
 calculateScreenEdgePositon()
-createStaticBox(new THREE.Vector3(0   , maxY - 0.2, 0), new THREE.Vector3(maxX*2 , 0.01    , 1), false)  // Top
-createStaticBox(new THREE.Vector3(maxX - 0.2, 0   , 0), new THREE.Vector3(0.01    , maxY*2 , 1), true)   // Right
-createStaticBox(new THREE.Vector3(0   , minY + 0.2, 0), new THREE.Vector3(maxX*2 , 0.01    , 1), false)  // Bottom
-createStaticBox(new THREE.Vector3(minX + 0.2, 0   , 0), new THREE.Vector3(0.01    , maxY*2 , 1), true)   // Left
+createStaticBox(new THREE.Vector3(0   , maxY - offset, 0), new THREE.Vector3(maxX*2 , 0.01    , 1), false)  // Top
+createStaticBox(new THREE.Vector3(maxX - offset, 0   , 0), new THREE.Vector3(0.01    , maxY*2 , 1), true)   // Right
+createStaticBox(new THREE.Vector3(0   , minY + offset, 0), new THREE.Vector3(maxX*2 , 0.01    , 1), false)  // Bottom
+createStaticBox(new THREE.Vector3(minX + offset, 0   , 0), new THREE.Vector3(0.01    , maxY*2 , 1), true)   // Left
 
 function calculateScreenEdgePositon(){
     // Create a vector for each corner of the screen
@@ -402,6 +352,22 @@ function createStaticBox(position, size = {x:1, y:1, z:1}, vertical){
     body.addShape(new CANNON.Box(new CANNON.Vec3(size.x / 2, size.y / 2, size.z / 2)))
     body.position.copy(position)
     world.addBody(body)
+
+    //body.addEventListener('collide', edgeCollision)
+}
+
+function edgeCollision(collision){
+    let velocity = collision.contact.getImpactVelocityAlongNormal()
+   
+    let position = new THREE.Vector3(collision.contact.bi.position.x + collision.contact.ri.x, collision.contact.bi.position.y + collision.contact.ri.y, 0) // world position of impact
+
+    const geo = new THREE.SphereGeometry(velocity/15)
+    const mesh = new THREE.Mesh(geo, new THREE.MeshNormalMaterial())
+    mesh.position.set(position.x, position.y, 0)
+    scene.add(mesh)
+
+    //calculate which led to light up using position
+    //send message to microbit with LED index and brightness (just index to begin)
 }
 
 function earthquake(){
@@ -473,18 +439,18 @@ function updateCamType(){
     }
 }
 
-function randomColour(){
+function getRandomColour(){
     var rand = Math.floor(Math.random() * Object.keys(colours).length)
     var randColour = colours[Object.keys(colours)[rand]]
     return randColour
 }
 
-function randomFont(){
+function getRandomFont(){
     var rand = Math.floor(Math.random() * fonts.length )
     return fonts[rand]
 }
 
-function randomBackgroundColour(){
+function getRandomBGColour(){
     var rand = Math.floor(Math.random() * Object.keys(bgColours).length)
     var randColour = bgColours[Object.keys(bgColours)[rand]]
     return randColour
@@ -492,8 +458,42 @@ function randomBackgroundColour(){
 
 function resetAll(){
     resetLetterPosition()
-    randomiseLetterFont()
-    randomiseLetterColour()
+    randomiseAllFonts()
+    randomiseAllColours()
+}
+
+function randomiseAllFonts(){
+    letters.forEach(element => {
+
+        let newGeo = new TextGeometry(
+            element.userData.letter,
+            {
+                font: getRandomFont(),
+                size: 0.35,
+                height: 0.02,
+                curveSegments: 12,
+                bevelEnabled: true,
+                bevelThickness: 0.001,
+                bevelSize: 0.002,
+                bevelOffset: 0,
+                bevelSegments: 5
+            }
+        )
+        newGeo.computeBoundingBox()
+        newGeo.center()
+        
+        element.geometry.dispose()
+        element.geometry = newGeo
+    });
+}
+
+function randomiseAllColours(){
+    letters.forEach(element => {
+        let newMat = new THREE.MeshBasicMaterial( { color: getRandomColour() })
+
+        element.material.dispose()
+        element.material = newMat
+    });
 }
 
 function setGravity(x, y){
@@ -510,7 +510,7 @@ window.addEventListener('keydown', function(event) {
     else if(event.key.charCodeAt(0) >= 65 && event.key.charCodeAt(0) <= 90){    //If input is A-Z (Upper case)
         //createLetter(event.key, randomFont(), new THREE.Vector3(0,0,0))
     }
-    if(parameters.typeInput) createLetter(event.key, randomFont(), new THREE.Vector3(0,0,0))    //if type input is enabled, create letter with the input
+    if(parameters.typeInput) createLetter(event.key, getRandomFont(), new THREE.Vector3(0,0,0))    //if type input is enabled, create letter with the input
 
     if(event.key.charCodeAt(0) >= 48 && event.key.charCodeAt(0) <= 57){     // if input is a number key, send it to microbit with delimiter
         console.log("Sending keycode: " + event.key + "|")
@@ -526,8 +526,8 @@ window.addEventListener('mousemove', (event) => {
 })
 
 window.addEventListener('click', (event) => {
-    console.log("Click")
-    resetAll()
+    //console.log("Click")
+    //resetAll()
 })
 
 window.addEventListener('resize', () =>
@@ -547,80 +547,10 @@ window.addEventListener('resize', () =>
     calculateScreenEdgePositon()
 })
 
-// Debug menu /////
-parameters.reset = () =>
-{
-    for(const object of objectsToUpdate)
-    {
-        // Remove body
-        object.body.removeEventListener('collide', playHitSound)
-        world.removeBody(object.body)
-
-        // Remove mesh
-        scene.remove(object.mesh)
-    }
-    
-    objectsToUpdate.splice(0, objectsToUpdate.length)
-}
-
 ///////// Microbit stuff /////////
-
-serialConnected = false
-
-document.addEventListener("DOMContentLoaded", () => {
-    console.log("DOM content loaded")
-})
-
-async function connectSerial(){
-    const port = await navigator.serial.requestPort()
-    await port.open({ baudRate: 115200 })
-
-    console.log(port.getInfo())
-
-    let log
-
-    while(port.readable){
-        //const reader = port.readable.getReader()
-
-        try{
-
-            const textDecoder = new TextDecoderStream()
-            port.readable.pipeTo(textDecoder.writable)
-            
-            const reader = textDecoder.readable.getReader()
-
-            while(true){
-                const {value, done} = await reader.read()
-
-                if(value){
-                    log += value + '\n'
-                    console.log(value)
-                }
-        
-                if(done){
-                    console.log(value)
-                    reader.releaseLock()
-                    break
-                }
-        
-                //console.log(value)
-            }
-        }
-        catch (error){
-            console.log(error)
-        }
-    }
-
-    serialConnected = true
-}
-
-async function clickConnectSerial(){
-    await connectSerial()
-}
 
 async function clickConnectWebUSB(){
     uBitConnectDevice(uBitEventHandler)
-    
 }
 
 async function clickSendWebUSB(){
@@ -661,6 +591,18 @@ async function parseMBData(packet){
         case "s":
             // shake
             resetAll()
+
+            break
+        case "a":
+            // a button pressed
+            earthquake()
+            break
+        case "b":
+            // b button pressed
+
+            break
+        case "c":
+            // c button pressed
 
             break
     }
