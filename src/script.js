@@ -11,10 +11,12 @@ import CannonDebugger from 'cannon-es-debugger'
 let helvetikerFont, loraFont, spaceMonoFont, fontsLoaded
 let world, defaultMaterial, defaultContactMaterial, stonePhysMaterial, stoneContactMaterial, cannonDebugger
 let minX, maxX, minY, maxY  //Stores the min and max X and Y world postions of the edges of the screen
+let serialConnected = false
 
 const fontsToLoad = 3
 
-var cannonDebugEnabled = true
+//var cannonDebugEnabled = true
+//var typeInput = true
 var useOrtho = true
 var fontLoadFlag = false
 
@@ -23,7 +25,7 @@ const fonts = []
 
 const sizes = { width: window.innerWidth, height: window.innerHeight}
 const aspectRatio = sizes.width / sizes.height
-
+const mouse = new THREE.Vector2()
 
 const parameters = {
     toggleCam: () => {
@@ -33,9 +35,27 @@ const parameters = {
     earthquake: () => {
         earthquake()
     },
+    randomFont: () => {
+        randomiseLetterFont()
+    },
+    connectSerial: () => {
+        clickConnectSerial()
+    },
+    connectWebUSB: () => {
+        clickConnectWebUSB()
+    },
+    sendWebUSB: () => {
+        clickSendWebUSB()
+    },
     cannonDebugEnabled: false,
-    earthquakeForce: 5
+    typeInput: false,
+    mouseGravity: false,
+    MBGravity: false,
+    earthquakeForce: 5,
+    gravityLimit: 1
 }
+
+const xPositions = [-1, -0.8, -0.6, -0.4, -0.2, 0, 0.2, 0.4, 0.6, 0.8, 1]
 
 const colours = [
     new THREE.Color(0x354544),  // grey green
@@ -48,7 +68,7 @@ const colours = [
     new THREE.Color(0xC34B78),  // strong pink
     new THREE.Color(0x1D5B66),  // teal
     new THREE.Color(0x1F7DB3),  // lighter blue
-    new THREE.Color(0x1B273F),  // darkish blue
+    //new THREE.Color(0x1B273F),  // darkish blue
     new THREE.Color(0x6C462F),  // brown
     new THREE.Color(0xE96D13),  // nba orange
     new THREE.Color(0x6C462F)   //nba purple
@@ -139,21 +159,22 @@ const gui = new dat.GUI()
 
 gui.add(parameters, 'earthquake')
 gui.add(parameters, 'toggleCam')
+gui.add(parameters, 'randomFont')
+gui.add(parameters, "connectWebUSB")
+gui.add(parameters, "sendWebUSB")
 gui.add(parameters, 'cannonDebugEnabled')
+gui.add(parameters, 'typeInput')
+gui.add(parameters, 'mouseGravity')
+gui.add(parameters, 'MBGravity')
 gui.add(parameters, 'earthquakeForce').min(0).max(10).step(1)
-//gui.add(parameters, 'reset')
-
-// geometry /-/-/-/-/-/-/-/
-const sphereGeometry = new THREE.SphereGeometry(1, 20, 20)
-const boxGeometry = new THREE.BoxGeometry(1, 1, 1)
-
+gui.add(parameters, 'gravityLimit').min(0).max(10).step(1)
 
 function initPhysics(){
     // Physics /////
     world = new CANNON.World()
     world.broadphase = new CANNON.SAPBroadphase(world)
     world.allowSleep = true
-    world.gravity.set(0, - 5, 0)
+    setGravity(0, -1)
 
     defaultMaterial = new CANNON.Material('default')
     defaultContactMaterial = new CANNON.ContactMaterial(
@@ -181,9 +202,15 @@ function initPhysics(){
 }
 
 function onFontsLoaded(){
-    //createLetter("P", helvetikerFont, new THREE.Vector3(-0.2, 0, 0))
-    //createLetter("h", loraFont, new THREE.Vector3(0, 0, 0))
-    //createLetter("o", spaceMonoFont, new THREE.Vector3(0.2, 0, 0))
+    if(!parameters.typeInput){
+        createLetter("P", randomFont(), new THREE.Vector3(-1.2, 0, 0))
+        createLetter("h", randomFont(), new THREE.Vector3(0, 0, 0))
+        createLetter("o", randomFont(), new THREE.Vector3(0.2, 0, 0))
+        createLetter("e", randomFont(), new THREE.Vector3(0.2, 0, 0))
+        createLetter("n", randomFont(), new THREE.Vector3(0.2, 0, 0))
+        createLetter("i", randomFont(), new THREE.Vector3(0.2, 0, 0))
+        createLetter("x", randomFont(), new THREE.Vector3(0.2, 0, 0))
+    }
 }
 
 function loadFonts(){   // load and store all fonts, called once
@@ -217,6 +244,7 @@ function loadFonts(){   // load and store all fonts, called once
     })
 }
 
+var letterSpawnCount = 0
 function createLetter(textString, font, position){
     const size = 0.35
     const textGeometry = new TextGeometry(
@@ -224,7 +252,7 @@ function createLetter(textString, font, position){
         {
             font: font,
             size: size,
-            height: 0.05,
+            height: 0.02,
             curveSegments: 12,
             bevelEnabled: true,
             bevelThickness: 0.001,
@@ -240,26 +268,35 @@ function createLetter(textString, font, position){
     
     const mesh = new THREE.Mesh(textGeometry, mat)
     mesh.name = textString + "_letter"
-    mesh.userData = { letter: textString }
-    mesh.position.copy(position)
+    //mesh.position.copy(position)
+    mesh.position.x = xPositions[letterSpawnCount]
+    //mesh.position.y = 0.7
     letters.push(mesh)
     scene.add(mesh)
+
+    var start = new THREE.Vector3()
+    start.copy(mesh.position)
+    mesh.userData = { letter: textString, startPos: start }
+    //if(textString == "P") console.log(mesh)
+
+    letterSpawnCount++
+    if(letterSpawnCount > xPositions.length) letterSpawnCount = 0
     
     const helper = new THREE.Box3Helper(textGeometry.boundingBox)
     //scene.add(helper)
     helper.name = textString + "_helper"
 
     const body = new CANNON.Body({
-        mass: 1,
+        mass: rand(1,5),
         angularFactor: new CANNON.Vec3(0,0,1),      //Restricts rotation on x and y axis
         linearFactor: new CANNON.Vec3( 1, 1, 0),     //Restricts movement on z axis 
         angularDamping: 0.7
     })
     body.addShape(
-        new CANNON.Box( new CANNON.Vec3(size/3, size/2, size/2)) 
+        new CANNON.Box( new CANNON.Vec3(size/4, size/2, size/2)) 
     )
 
-    body.position.copy(position)
+    body.position.copy(mesh.position)
     world.addBody(body)
     objectsToUpdate.push({ mesh, body })
 }
@@ -273,15 +310,45 @@ function createP(font){
      
 }
 
-function updateLetterFont(){
-    
+function randomiseLetterFont(){
+    letters.forEach(element => {
+
+        let newGeo = new TextGeometry(
+            element.userData.letter,
+            {
+                font: randomFont(),
+                size: 0.35,
+                height: 0.02,
+                curveSegments: 12,
+                bevelEnabled: true,
+                bevelThickness: 0.001,
+                bevelSize: 0.002,
+                bevelOffset: 0,
+                bevelSegments: 5
+            }
+        )
+        newGeo.computeBoundingBox()
+        newGeo.center()
+        
+        element.geometry.dispose()
+        element.geometry = newGeo
+    });
+}
+
+function randomiseLetterColour(){
+    letters.forEach(element => {
+        let newMat = new THREE.MeshBasicMaterial( { color: randomColour() })
+
+        element.material.dispose()
+        element.material = newMat
+    });
 }
 
 calculateScreenEdgePositon()
-createStaticBox(new THREE.Vector3(0   , maxY, 0), new THREE.Vector3(maxX*2 , 0.01    , 1), false)  // Top
-createStaticBox(new THREE.Vector3(maxX, 0   , 0), new THREE.Vector3(0.01    , maxY*2 , 1), true)   // Right
-createStaticBox(new THREE.Vector3(0   , minY, 0), new THREE.Vector3(maxX*2 , 0.01    , 1), false)  // Bottom
-createStaticBox(new THREE.Vector3(minX, 0   , 0), new THREE.Vector3(0.01    , maxY*2 , 1), true)   // Left
+createStaticBox(new THREE.Vector3(0   , maxY - 0.2, 0), new THREE.Vector3(maxX*2 , 0.01    , 1), false)  // Top
+createStaticBox(new THREE.Vector3(maxX - 0.2, 0   , 0), new THREE.Vector3(0.01    , maxY*2 , 1), true)   // Right
+createStaticBox(new THREE.Vector3(0   , minY + 0.2, 0), new THREE.Vector3(maxX*2 , 0.01    , 1), false)  // Bottom
+createStaticBox(new THREE.Vector3(minX + 0.2, 0   , 0), new THREE.Vector3(0.01    , maxY*2 , 1), true)   // Left
 
 function calculateScreenEdgePositon(){
     // Create a vector for each corner of the screen
@@ -314,10 +381,10 @@ function calculateScreenEdgePositon(){
     maxY = Math.max(worldTopLeft.y, worldTopRight.y, worldBottomLeft.y, worldBottomRight.y);
 
     // Log the screen edges
-    console.log("Min X:", minX);
-    console.log("Max X:", maxX);
-    console.log("Min Y:", minY);
-    console.log("Max Y:", maxY);
+    //console.log("Min X:", minX);
+    //console.log("Max X:", maxX);
+    //console.log("Min Y:", minY);
+    //console.log("Max Y:", maxY);
 
 }
 
@@ -326,8 +393,7 @@ function createStaticBox(position, size = {x:1, y:1, z:1}, vertical){
     const boxMesh = new THREE.Mesh(boxGeo, mat)
 
     boxMesh.position.copy(position)
-    //boxMesh.scale.copy(scale)
-
+    boxMesh.name = "static_box"
     scene.add(boxMesh)
 
     const body = new CANNON.Body({
@@ -336,7 +402,6 @@ function createStaticBox(position, size = {x:1, y:1, z:1}, vertical){
     body.addShape(new CANNON.Box(new CANNON.Vec3(size.x / 2, size.y / 2, size.z / 2)))
     body.position.copy(position)
     world.addBody(body)
-    
 }
 
 function earthquake(){
@@ -345,6 +410,15 @@ function earthquake(){
         impulse = new THREE.Vector3(rand(-parameters.earthquakeForce,parameters.earthquakeForce), rand(5,parameters.earthquakeForce), 0)
         element.body.applyImpulse( impulse, CANNON.Vec3.ZERO )
     });
+}
+
+function resetLetterPosition(){
+    for(var i = 0; i < letters.length ; i++){
+        var pos = objectsToUpdate[i].mesh.userData.startPos
+        objectsToUpdate[i].body.position.set(pos.x, pos.y, pos.z)
+        objectsToUpdate[i].body.velocity.set(0,0,0)
+        objectsToUpdate[i].body.quaternion.setFromEuler(0,0,0, 'XYZ')
+    }
 }
 
 // Update /////
@@ -362,6 +436,7 @@ const tick = () =>
         fontLoadFlag = false
     }
 
+
     // Update physics
     world.step(1 / 60, deltaTime, 3)
     if(objectsToUpdate.length > 0){
@@ -373,8 +448,6 @@ const tick = () =>
         object.mesh.quaternion.copy(object.body.quaternion)
     }
 
-    // Update controls
-    //controls.update()
     if(parameters.cannonDebugEnabled) cannonDebugger.update()
 
     // Render
@@ -417,16 +490,44 @@ function randomBackgroundColour(){
     return randColour
 }
 
+function resetAll(){
+    resetLetterPosition()
+    randomiseLetterFont()
+    randomiseLetterColour()
+}
+
+function setGravity(x, y){
+    world.gravity.set(x,y,0)
+    console.log("Gravity set to x: " + x + "  y: " + y)
+}
+
 // Events /////
 window.addEventListener('keydown', function(event) {
     console.log(event.key.charCodeAt(0))
-    if(event.key.charCodeAt(0) >= 97 && event.key.charCodeAt(0) <= 122){    //If input is a letter a-z
+    if(event.key.charCodeAt(0) >= 97 && event.key.charCodeAt(0) <= 122){    //If input is a letter a-z (lower case)
         //createLetter(event.key, randomFont(), new THREE.Vector3(0,0,0))
     }
-    else if(event.key.charCodeAt(0) >= 65 && event.key.charCodeAt(0) <= 90){
+    else if(event.key.charCodeAt(0) >= 65 && event.key.charCodeAt(0) <= 90){    //If input is A-Z (Upper case)
         //createLetter(event.key, randomFont(), new THREE.Vector3(0,0,0))
     }
-    createLetter(event.key, randomFont(), new THREE.Vector3(0,0,0))
+    if(parameters.typeInput) createLetter(event.key, randomFont(), new THREE.Vector3(0,0,0))    //if type input is enabled, create letter with the input
+
+    if(event.key.charCodeAt(0) >= 48 && event.key.charCodeAt(0) <= 57){     // if input is a number key, send it to microbit with delimiter
+        console.log("Sending keycode: " + event.key + "|")
+        uBitSend(connectedDevices[0], event.key + "|")
+    }
+})
+
+window.addEventListener('mousemove', (event) => {
+    mouse.x = event.clientX / sizes.width * 2 - 1
+    mouse.y = - (event.clientY / sizes.height) * 2 + 1
+
+    if(parameters.mouseGravity) setGravity(mouse.x, mouse.y)
+})
+
+window.addEventListener('click', (event) => {
+    console.log("Click")
+    resetAll()
 })
 
 window.addEventListener('resize', () =>
@@ -462,4 +563,148 @@ parameters.reset = () =>
     objectsToUpdate.splice(0, objectsToUpdate.length)
 }
 
+///////// Microbit stuff /////////
 
+serialConnected = false
+
+document.addEventListener("DOMContentLoaded", () => {
+    console.log("DOM content loaded")
+})
+
+async function connectSerial(){
+    const port = await navigator.serial.requestPort()
+    await port.open({ baudRate: 115200 })
+
+    console.log(port.getInfo())
+
+    let log
+
+    while(port.readable){
+        //const reader = port.readable.getReader()
+
+        try{
+
+            const textDecoder = new TextDecoderStream()
+            port.readable.pipeTo(textDecoder.writable)
+            
+            const reader = textDecoder.readable.getReader()
+
+            while(true){
+                const {value, done} = await reader.read()
+
+                if(value){
+                    log += value + '\n'
+                    console.log(value)
+                }
+        
+                if(done){
+                    console.log(value)
+                    reader.releaseLock()
+                    break
+                }
+        
+                //console.log(value)
+            }
+        }
+        catch (error){
+            console.log(error)
+        }
+    }
+
+    serialConnected = true
+}
+
+async function clickConnectSerial(){
+    await connectSerial()
+}
+
+async function clickConnectWebUSB(){
+    uBitConnectDevice(uBitEventHandler)
+    
+}
+
+async function clickSendWebUSB(){
+    if(connectedDevices.length > 0){
+        //uBitSend(connectedDevices[0], "toggle_send|")
+    }
+    else{
+        console.log("No WebUSB devices connected")
+    }
+}
+
+var lastGravX, lastGravY
+var gravX = 0
+var gravY = 0
+
+async function parseMBData(packet){
+    var data = packet.data
+    var id = packet.graph
+
+    console.log("Received data: " + data + "  on graph: " + id) 
+
+    switch(id){
+        case "x":
+            // pitch (x axis, -180 to 180)
+            if(data != null) gravY = normaliseInRange(data, -180, 180, -parameters.gravityLimit, parameters.gravityLimit)
+            else gravY = lastGravY
+
+            break
+        case "y":
+            // roll (y axis, -180 to 180)
+            if(data != null) gravX = normaliseInRange(data, -180, 180, -parameters.gravityLimit, parameters.gravityLimit)
+            else gravX = lastGravX
+
+            break
+        case "z":
+            // compass heading (0 to 360)
+            break
+        case "s":
+            // shake
+            resetAll()
+
+            break
+    }
+
+    if(parameters.MBGravity){
+        console.log("setting gravity to x: " + gravX.toFixed(2), "  y: " + gravY.toFixed(2))
+        setGravity(gravX, -gravY)
+    }    
+    lastGravX = gravX
+    lastGravY = gravY
+}
+
+var connectedDevices = []
+
+function uBitEventHandler(reason, device, data){
+    //console.log(reason, data)
+    switch(reason){
+        case "connected":
+            console.log("USB device connected")
+            connectedDevices.push(device)
+            break
+        case "disconnected":
+            console.log("USB device disconnected")
+            connectedDevices = connectedDevices.filter( v => v != device)
+            break
+        case "connection failure":
+            console.log("USB device connection failure")
+            break
+        case "error":
+            console.log("USB device error")
+            break
+        case "console":
+            console.log("USB device Console Data: " + data.data)
+            break
+        case "graph-event":
+            //console.log(`USB device Graph Event:  ${data.data} (for ${data.graph}${data.series.length?" / series "+data.series:""})`)
+            break
+        case "graph-data":
+            //console.log(`USB Device Graph Data: ${data.data} (for ${data.graph}${data.series.length?" / series "+data.series:""})`)
+            parseMBData(data)
+            break
+    }
+}
+
+function normaliseInRange(val, oldMin, oldMax, newMin, newMax){
+    return newMin + (val - oldMin) * (newMax - newMin) / (oldMax - oldMin)
+}

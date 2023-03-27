@@ -1,11 +1,12 @@
 {
-  "name": "threejs-journey-exercise",
+  "name": "place-and-memory",
   "private": true,
   "version": "0.0.0",
   "type": "module",
   "scripts": {
     "dev": "vite",
-    "build": "vite build"
+    "build": "vite build",
+    "deploy": "vercel --prod"
   },
   "devDependencies": {
     "vite": "^4.0.4"
@@ -13,7 +14,10 @@
   "dependencies": {
     "cannon-es": "^0.20.0",
     "cannon-es-debugger": "^1.0.0",
+    "dapjs": "^2.3.0",
     "lil-gui": "^0.18.0",
-    "three": "^0.148.0"
+    "three": "^0.148.0",
+    "usb": "^2.9.0",
+    "vercel": "^28.16.4"
   }
 }
