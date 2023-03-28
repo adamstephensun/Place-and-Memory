@@ -3,7 +3,7 @@ An interactive piece developed for the Place and Memory exhibition at [Phoenix A
 
 Code by [me](adam-stephenson.co.uk)
 
-Exhibition curated by Irina Tsokova, created in collaboration with Martin Cibik, Sean Clark, Calum Vaughan, Iulia Radu
+Exhibition curated by Irina Tsokova, created in collaboration with Martin Cibik, Sean Clark, Calum Vaughan and Iulia Radu
 
 ## How to use
 [Live version here](https://place-and-memory.vercel.app/)
