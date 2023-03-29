@@ -186,12 +186,12 @@ function initPhysics(){
 function onFontsLoaded(){
     if(!parameters.typeInput){
         createLetter("P", getRandomFont(), new THREE.Vector3(-1.2, 0, 0))
-        createLetter("h", getRandomFont(), new THREE.Vector3(0, 0, 0))
-        createLetter("o", getRandomFont(), new THREE.Vector3(0.2, 0, 0))
-        createLetter("e", getRandomFont(), new THREE.Vector3(0.2, 0, 0))
-        createLetter("n", getRandomFont(), new THREE.Vector3(0.2, 0, 0))
-        createLetter("i", getRandomFont(), new THREE.Vector3(0.2, 0, 0))
-        createLetter("x", getRandomFont(), new THREE.Vector3(0.2, 0, 0))
+        //createLetter("h", getRandomFont(), new THREE.Vector3(0, 0, 0))
+        //createLetter("o", getRandomFont(), new THREE.Vector3(0.2, 0, 0))
+        //createLetter("e", getRandomFont(), new THREE.Vector3(0.2, 0, 0))
+        //createLetter("n", getRandomFont(), new THREE.Vector3(0.2, 0, 0))
+        //createLetter("i", getRandomFont(), new THREE.Vector3(0.2, 0, 0))
+        //createLetter("x", getRandomFont(), new THREE.Vector3(0.2, 0, 0))
 
     }
 }
@@ -270,17 +270,20 @@ function createLetter(textString, font, position){
         mass: rand(1,5),
         angularFactor: new CANNON.Vec3(0,0,1),      //Restricts rotation on x and y axis
         linearFactor: new CANNON.Vec3( 1, 1, 0),     //Restricts movement on z axis 
-        angularDamping: 0.7
+        angularDamping: 0.7,
+        
     })
     body.addShape(
         new CANNON.Box( new CANNON.Vec3(size/4, size/2, size/2)) 
     )
 
+    body.userData = { obj: mesh }
+
     body.position.copy(mesh.position)
     world.addBody(body)
     objectsToUpdate.push({ mesh, body })
 
-    body.addEventListener('collide', edgeCollision)
+    //body.addEventListener('collide', edgeCollision)
 }
 
 // function to create each letter, 
@@ -353,10 +356,11 @@ function createStaticBox(position, size = {x:1, y:1, z:1}, vertical){
     body.position.copy(position)
     world.addBody(body)
 
-    //body.addEventListener('collide', edgeCollision)
+    body.addEventListener('collide', edgeCollision)
 }
 
 function edgeCollision(collision){
+    console.log(collision.contact)
     let velocity = collision.contact.getImpactVelocityAlongNormal()
    
     let position = new THREE.Vector3(collision.contact.bi.position.x + collision.contact.ri.x, collision.contact.bi.position.y + collision.contact.ri.y, 0) // world position of impact
@@ -368,6 +372,36 @@ function edgeCollision(collision){
 
     //calculate which led to light up using position
     //send message to microbit with LED index and brightness (just index to begin)
+
+    if(collision.contact.bi.userData != null){
+        var collisionObj = collision.contact.bi.userData.obj
+        console.log(collisionObj)
+
+        var colour = collisionObj.material.color
+        
+        //sendCollisionMessage(colour, 10, 255)
+    }
+    else{
+        console.log("no user data")
+    }
+}
+
+function sendCollisionMessage(col, position, intensity){
+    console.log("Send collision message. r: " + col.r + "  g: " + col.g + " b: " + col.b + " pos: " + position + " intensity: " + intensity)
+
+    uBitSend(connectedDevices[0], "r" + col.r + ",")          // green
+    uBitSend(connectedDevices[0], "g" + col.g + ",")          // green
+    uBitSend(connectedDevices[0], "b" + col.b + ",")          // green
+    uBitSend(connectedDevices[0], "p" + position + ",")          // green
+    uBitSend(connectedDevices[0], "i" + intensity + ",")          // green
+    uBitSend(connectedDevices[0], "s" + 1 + ",")          // green
+
+    //uBitSend(connectedDevices[0], col.r + ",")          // red
+    //uBitSend(connectedDevices[0], col.g + ",")          // green
+    //uBitSend(connectedDevices[0], col.b + ":")          // blue
+    //uBitSend(connectedDevices[0], position + ".")       // LED index
+    //uBitSend(connectedDevices[0], intensity + "#")      // intensity
+    //uBitSend(connectedDevices[0], "1|")                 // draw to LED strip
 }
 
 function earthquake(){
@@ -498,7 +532,7 @@ function randomiseAllColours(){
 
 function setGravity(x, y){
     world.gravity.set(x,y,0)
-    console.log("Gravity set to x: " + x + "  y: " + y)
+    //console.log("Gravity set to x: " + x + "  y: " + y)
 }
 
 // Events /////
@@ -515,6 +549,10 @@ window.addEventListener('keydown', function(event) {
     if(event.key.charCodeAt(0) >= 48 && event.key.charCodeAt(0) <= 57){     // if input is a number key, send it to microbit with delimiter
         console.log("Sending keycode: " + event.key + "|")
         uBitSend(connectedDevices[0], event.key + "|")
+    }
+
+    if(event.key.charCodeAt(0) == 32){      // space bar        
+        sendCollisionMessage(new THREE.Color(0.5,0.7,0.2), 10, 255)
     }
 })
 
@@ -570,7 +608,7 @@ async function parseMBData(packet){
     var data = packet.data
     var id = packet.graph
 
-    console.log("Received data: " + data + "  on graph: " + id) 
+    //console.log("Received data: " + data + "  on graph: " + id) 
 
     switch(id){
         case "x":
