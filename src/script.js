@@ -12,11 +12,12 @@ let helvetikerFont, loraFont, spaceMonoFont, fontsLoaded
 let world, defaultMaterial, defaultContactMaterial, stonePhysMaterial, stoneContactMaterial, cannonDebugger
 let activeCamera
 let minX, maxX, minY, maxY  //Stores the min and max X and Y world postions of the edges of the screen
+let sleepingBodies = 0
 
 const fontsToLoad = 3
 
-var useOrtho = true
-var fontLoadFlag = false
+let useOrtho = true
+let fontLoadFlag = false
 
 const objectsToUpdate = []
 const fonts = []
@@ -47,6 +48,7 @@ const parameters = {
     typeInput: false,
     mouseGravity: false,
     MBGravity: false,
+    collisionVisualisation: false,
     earthquakeForce: 5,
     gravityLimit: 1
 }
@@ -146,6 +148,7 @@ gui.add(parameters, "connectWebUSB")
 gui.add(parameters, "sendWebUSB")
 gui.add(parameters, 'cannonDebugEnabled')
 gui.add(parameters, 'typeInput')
+gui.add(parameters, 'collisionVisualisation')
 gui.add(parameters, 'mouseGravity').onChange( function(){setGravity(0,-1)})  // reset the gravity to default when toggled
 gui.add(parameters, 'MBGravity').onChange( function(){setGravity(0,-1)})
 gui.add(parameters, 'earthquakeForce').min(0).max(10).step(1)
@@ -186,12 +189,12 @@ function initPhysics(){
 function onFontsLoaded(){
     if(!parameters.typeInput){
         createLetter("P", getRandomFont(), new THREE.Vector3(-1.2, 0, 0))
-        //createLetter("h", getRandomFont(), new THREE.Vector3(0, 0, 0))
-        //createLetter("o", getRandomFont(), new THREE.Vector3(0.2, 0, 0))
-        //createLetter("e", getRandomFont(), new THREE.Vector3(0.2, 0, 0))
-        //createLetter("n", getRandomFont(), new THREE.Vector3(0.2, 0, 0))
-        //createLetter("i", getRandomFont(), new THREE.Vector3(0.2, 0, 0))
-        //createLetter("x", getRandomFont(), new THREE.Vector3(0.2, 0, 0))
+        createLetter("h", getRandomFont(), new THREE.Vector3(0, 0, 0))
+        createLetter("o", getRandomFont(), new THREE.Vector3(0.2, 0, 0))
+        createLetter("e", getRandomFont(), new THREE.Vector3(0.2, 0, 0))
+        createLetter("n", getRandomFont(), new THREE.Vector3(0.2, 0, 0))
+        createLetter("i", getRandomFont(), new THREE.Vector3(0.2, 0, 0))
+        createLetter("x", getRandomFont(), new THREE.Vector3(0.2, 0, 0))
 
     }
 }
@@ -271,13 +274,23 @@ function createLetter(textString, font, position){
         angularFactor: new CANNON.Vec3(0,0,1),      //Restricts rotation on x and y axis
         linearFactor: new CANNON.Vec3( 1, 1, 0),     //Restricts movement on z axis 
         angularDamping: 0.7,
-        
     })
     body.addShape(
         new CANNON.Box( new CANNON.Vec3(size/4, size/2, size/2)) 
     )
 
     body.userData = { obj: mesh }
+    body.allowSleep = true
+    body.sleepSpeedLimit = 0.1      // body will feel sleepy if normalised velocity < 0.1
+    body.sleepTimeLimit = 10        //body will sleep after 10 seconds
+    body.addEventListener('sleep', function(event){
+        sleepingBodies++
+        console.log("num of sleeping bodies: " + sleepingBodies)
+    })
+    body.addEventListener('wakeup', function(event){
+        sleepingBodies--
+        console.log("num of sleeping bodies: " + sleepingBodies)
+    })
 
     body.position.copy(mesh.position)
     world.addBody(body)
@@ -291,9 +304,6 @@ function createLetter(textString, font, position){
 // Most fonts will be similar enough to use the same shapes
 // master function createLetter() that calls baby functions
 
-function createP(font){
-     
-}
 
 var offset = 0  //offset the edges from the edge of the screen. positive value (0.2) = gap between screen edge and box edge
 
@@ -365,10 +375,12 @@ function edgeCollision(collision){
    
     let position = new THREE.Vector3(collision.contact.bi.position.x + collision.contact.ri.x, collision.contact.bi.position.y + collision.contact.ri.y, 0) // world position of impact
 
-    const geo = new THREE.SphereGeometry(velocity/15)
-    const mesh = new THREE.Mesh(geo, new THREE.MeshNormalMaterial())
-    mesh.position.set(position.x, position.y, 0)
-    scene.add(mesh)
+    if(parameters.collisionVisualisation){  // if true, spawn a sphere on collision points
+        const geo = new THREE.SphereGeometry(velocity/15)
+        const mesh = new THREE.Mesh(geo, new THREE.MeshNormalMaterial())
+        mesh.position.set(position.x, position.y, 0)
+        scene.add(mesh)
+    }
 
     //calculate which led to light up using position
     //send message to microbit with LED index and brightness (just index to begin)
@@ -436,7 +448,6 @@ const tick = () =>
         fontLoadFlag = false
     }
 
-
     // Update physics
     world.step(1 / 60, deltaTime, 3)
     if(objectsToUpdate.length > 0){
@@ -446,6 +457,17 @@ const tick = () =>
     {
         object.mesh.position.set(object.body.position.x, object.body.position.y, 0)
         object.mesh.quaternion.copy(object.body.quaternion)
+
+        if(object.mesh.position.x > maxX || object.mesh.position.x < minX || object.mesh.position.y > maxY || object.mesh.position.y < minY){
+            // check if any of the letters escape the bounds, reset all
+            resetAll()
+        }
+    }
+
+    if(sleepingBodies >= letters.length){
+        console.log("all bodies sleeping")
+        earthquake()
+        //maybe add randomness here
     }
 
     if(parameters.cannonDebugEnabled) cannonDebugger.update()
@@ -560,7 +582,7 @@ window.addEventListener('mousemove', (event) => {
     mouse.x = event.clientX / sizes.width * 2 - 1
     mouse.y = - (event.clientY / sizes.height) * 2 + 1
 
-    if(parameters.mouseGravity) setGravity(mouse.x, mouse.y)
+    if(parameters.mouseGravity) setGravity(mouse.x * parameters.gravityLimit, mouse.y * parameters.gravityLimit)
 })
 
 window.addEventListener('click', (event) => {
