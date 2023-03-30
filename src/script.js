@@ -195,7 +195,6 @@ function onFontsLoaded(){
         createLetter("n", getRandomFont(), new THREE.Vector3(0.2, 0, 0))
         createLetter("i", getRandomFont(), new THREE.Vector3(0.2, 0, 0))
         createLetter("x", getRandomFont(), new THREE.Vector3(0.2, 0, 0))
-
     }
 }
 
@@ -304,7 +303,6 @@ function createLetter(textString, font, position){
 // Most fonts will be similar enough to use the same shapes
 // master function createLetter() that calls baby functions
 
-
 var offset = 0  //offset the edges from the edge of the screen. positive value (0.2) = gap between screen edge and box edge
 
 calculateScreenEdgePositon()
@@ -370,7 +368,7 @@ function createStaticBox(position, size = {x:1, y:1, z:1}, vertical){
 }
 
 function edgeCollision(collision){
-    console.log(collision.contact)
+    //console.log(collision.contact)
     let velocity = collision.contact.getImpactVelocityAlongNormal()
    
     let position = new THREE.Vector3(collision.contact.bi.position.x + collision.contact.ri.x, collision.contact.bi.position.y + collision.contact.ri.y, 0) // world position of impact
@@ -387,33 +385,32 @@ function edgeCollision(collision){
 
     if(collision.contact.bi.userData != null){
         var collisionObj = collision.contact.bi.userData.obj
-        console.log(collisionObj)
+        //console.log(collisionObj)
 
         var colour = collisionObj.material.color
         
         //sendCollisionMessage(colour, 10, 255)
     }
     else{
-        console.log("no user data")
+        //console.log("no user data")
     }
 }
 
 function sendCollisionMessage(col, position, intensity){
-    console.log("Send collision message. r: " + col.r + "  g: " + col.g + " b: " + col.b + " pos: " + position + " intensity: " + intensity)
 
-    uBitSend(connectedDevices[0], "r" + col.r + ",")          // green
-    uBitSend(connectedDevices[0], "g" + col.g + ",")          // green
-    uBitSend(connectedDevices[0], "b" + col.b + ",")          // green
-    uBitSend(connectedDevices[0], "p" + position + ",")          // green
-    uBitSend(connectedDevices[0], "i" + intensity + ",")          // green
-    uBitSend(connectedDevices[0], "s" + 1 + ",")          // green
+    var r = Math.round(col.r * 255)
+    var g = Math.round(col.g * 255)
+    var b = Math.round(col.b * 255)
 
-    //uBitSend(connectedDevices[0], col.r + ",")          // red
-    //uBitSend(connectedDevices[0], col.g + ",")          // green
-    //uBitSend(connectedDevices[0], col.b + ":")          // blue
-    //uBitSend(connectedDevices[0], position + ".")       // LED index
-    //uBitSend(connectedDevices[0], intensity + "#")      // intensity
-    //uBitSend(connectedDevices[0], "1|")                 // draw to LED strip
+    var message = r + "," + g + "," + b + "," + Math.round(position) + "," + intensity + "|"
+    if(connectedDevices.length > 0){
+        uBitSend(connectedDevices[0], message)
+        console.log("Sent collision message: " + message)
+    }
+    else{
+        console.log("Failed to send message: " + message + ". No connected devices")
+    }
+
 }
 
 function earthquake(){
@@ -464,7 +461,7 @@ const tick = () =>
         }
     }
 
-    if(sleepingBodies >= letters.length){
+    if(sleepingBodies >= letters.length){       //check if all the letters are sleeping, then earthquake them
         console.log("all bodies sleeping")
         earthquake()
         //maybe add randomness here
@@ -574,7 +571,7 @@ window.addEventListener('keydown', function(event) {
     }
 
     if(event.key.charCodeAt(0) == 32){      // space bar        
-        sendCollisionMessage(new THREE.Color(0.5,0.7,0.2), 10, 255)
+        sendCollisionMessage(new THREE.Color(Math.random(), Math.random(), Math.random()), Math.random() * 30, 255)
     }
 })
 
