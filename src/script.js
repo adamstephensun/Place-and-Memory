@@ -22,6 +22,7 @@ let fontLoadFlag = false
 const objectsToUpdate = []
 const fonts = []
 const letters  = []
+const textures = []     // list of lists of textures
 
 const p_textures = []
 const h_textures = []
@@ -30,13 +31,6 @@ const e_textures = []
 const n_textures = []
 const i_textures = []
 const x_textures = []
-const p_materials = []
-const h_materials = []
-const o_materials = []
-const e_materials = []
-const n_materials = []
-const i_materials = []
-const x_materials = []
 
 const sizes = { width: window.innerWidth, height: window.innerHeight}
 const aspectRatio = sizes.width / sizes.height
@@ -59,12 +53,12 @@ const parameters = {
     sendWebUSB: () => {
         clickSendWebUSB()
     },
-    cannonDebugEnabled: false,
+    cannonDebugEnabled: true,
     typeInput: false,
     mouseGravity: false,
     MBGravity: false,
     collisionVisualisation: false,
-    earthquakeForce: 5,
+    earthquakeForce: 0,
     gravityLimit: 1
 }
 
@@ -86,10 +80,10 @@ const colours = [
 ]
 
 const bgColours = [
-    new THREE.Color(0xBEB3B1),
-    new THREE.Color(0xC3BBB0),
-    new THREE.Color(0xCAC9C5),
-    new THREE.Color(0x1B273F)
+    //new THREE.Color(0xBEB3B1),
+    //new THREE.Color(0xC3BBB0),
+    //new THREE.Color(0xCAC9C5),
+    new THREE.Color(0x1B273F)       // dark blue
 ]
 
 const xPositions = [-1, -0.8, -0.6, -0.4, -0.2, 0, 0.2, 0.4, 0.6, 0.8, 1]   //List of x positions to cycle through when spawning letters with type input
@@ -137,8 +131,8 @@ const mat = new THREE.MeshBasicMaterial({ color: colours[2] })
 
 // init calls /-/-/-/-/-/-/-/
 initPhysics()
-loadFonts()
-loadSprites()
+//loadFonts()
+loadTextures()
 
 // Sounds /////
 const hitSound = new Audio('/sounds/hit.mp3')
@@ -234,28 +228,22 @@ function loadFonts(){   // load and store all fonts, called once
     })
 }
 
-function loadSprites(){
+function loadTextures(){
     for (var i = 0; i < 3; i++){    // 4 == number of sprites for each letter + 1
         p_textures.push(texLoader.load('sprites/p/' + i + '.png'))
-        p_materials.push(new THREE.SpriteMaterial({ map: p_textures[i] }))
-
         h_textures.push(texLoader.load('sprites/h/' + i + '.png'))
-        h_materials.push(new THREE.SpriteMaterial({ map: h_textures[i] }))
-
         o_textures.push(texLoader.load('sprites/o/' + i + '.png'))
-        o_materials.push(new THREE.SpriteMaterial({ map: o_textures[i] }))
-
         e_textures.push(texLoader.load('sprites/e/' + i + '.png'))
-        e_materials.push(new THREE.SpriteMaterial({ map: e_textures[i] }))
-
         n_textures.push(texLoader.load('sprites/n/' + i + '.png'))
-        n_materials.push(new THREE.SpriteMaterial({ map: n_textures[i] }))
-
         i_textures.push(texLoader.load('sprites/i/' + i + '.png'))
-        i_materials.push(new THREE.SpriteMaterial({ map: i_textures[i] }))
-
         x_textures.push(texLoader.load('sprites/x/' + i + '.png'))
-        x_materials.push(new THREE.SpriteMaterial({ map: x_textures[i] }))
+        textures.push(p_textures)
+        textures.push(h_textures)
+        textures.push(o_textures)
+        textures.push(e_textures)
+        textures.push(n_textures)
+        textures.push(i_textures)
+        textures.push(x_textures)
     }
     console.log("Sprite textures and materials loaded")
 }
@@ -275,6 +263,28 @@ function onFontsLoaded(){
 function getRandomListElement(list){
     var item = list[rand(0,list.length-1)]
     return item
+}
+
+function getTextureByLetter(letter){
+    if(letter == "p" || letter == "P") return getRandomListElement(p_textures)
+    if(letter == "h" || letter == "H") return getRandomListElement(h_textures)
+    if(letter == "o" || letter == "O") return getRandomListElement(o_textures)
+    if(letter == "e" || letter == "E") return getRandomListElement(e_textures)
+    if(letter == "n" || letter == "N") return getRandomListElement(n_textures)
+    if(letter == "i" || letter == "I") return getRandomListElement(i_textures)
+    if(letter == "x" || letter == "X") return getRandomListElement(x_textures)
+    else return null
+}
+
+function getListByLetter(letter){
+    if(letter == "p" || letter == "P") return p_textures
+    if(letter == "h" || letter == "H") return h_textures
+    if(letter == "o" || letter == "O") return o_textures
+    if(letter == "e" || letter == "E") return e_textures
+    if(letter == "n" || letter == "N") return n_textures
+    if(letter == "i" || letter == "I") return i_textures
+    if(letter == "x" || letter == "X") return x_textures
+    else return null
 }
 
 var letterSpawnCount = 0
@@ -326,7 +336,7 @@ function createLetter(textString, font, position){
         new CANNON.Box( new CANNON.Vec3(size/4, size/2, size/2)) 
     )
 
-    body.userData = { obj: mesh }
+    body.userData = { obj: mesh}
     body.allowSleep = true
     body.sleepSpeedLimit = 0.1      // body will feel sleepy if normalised velocity < 0.1
     body.sleepTimeLimit = 10        //body will sleep after 10 seconds
@@ -346,54 +356,6 @@ function createLetter(textString, font, position){
     //body.addEventListener('collide', edgeCollision)
 }
 
-
-
-//createLetterSprite("p")
-//createLetterSprite("h")
-//createLetterSprite("o")
-//createLetterSprite("e")
-//createLetterSprite("n")
-//createLetterSprite("i")
-//createLetterSprite("x")
-
-function createLetterSprite(textString){
-    
-    var mat
-    if(textString == "p" || textString == "P") mat = getRandomListElement(p_materials)
-    if(textString == "h" || textString == "H") mat = getRandomListElement(h_materials)
-    if(textString == "o" || textString == "O") mat = getRandomListElement(o_materials)
-    if(textString == "e" || textString == "E") mat = getRandomListElement(e_materials)
-    if(textString == "n" || textString == "N") mat = getRandomListElement(n_materials)
-    if(textString == "i" || textString == "I") mat = getRandomListElement(i_materials)
-    if(textString == "x" || textString == "X") mat = getRandomListElement(x_materials)
-
-    const mesh = new THREE.Sprite( mat )
-    scene.add(mesh)
-    mesh.scale.set(0.3,0.3,0.3)
-    mesh.material.color = getRandomColour()
-    //mesh.material.rotation = Math.PI
-
-    mesh.position.x = xPositions[letterSpawnCount]
-    letterSpawnCount++
-    if(letterSpawnCount > xPositions.length) letterSpawnCount = 0
-
-    letters.push(mesh)
-
-    const body = new CANNON.Body({
-        mass: 1,
-        angularFactor: new CANNON.Vec3(0, 0, 1),
-        linearFactor: new CANNON.Vec3(1, 1, 0),
-        angularDamping: 0.7
-    })
-    body.addShape(new CANNON.Box( new CANNON.Vec3(0.1, 0.2, 0.1)) )
-    
-    body.allowSleep = true
-
-    body.position.copy(mesh.position)
-    world.addBody(body)
-    objectsToUpdate.push({ mesh, body })
-}
-
 createLetterPlane("p")
 createLetterPlane("h")
 createLetterPlane("o")
@@ -402,18 +364,16 @@ createLetterPlane("n")
 createLetterPlane("i")
 createLetterPlane("x")
 
-function createLetterPlane(textString){
+function createLetterPlane(letter){
 
-    var tex
-    if(textString == "p" || textString == "P") tex = getRandomListElement(p_textures)
-    if(textString == "h" || textString == "H") tex = getRandomListElement(h_textures)
-    if(textString == "o" || textString == "O") tex = getRandomListElement(o_textures)
-    if(textString == "e" || textString == "E") tex = getRandomListElement(e_textures)
-    if(textString == "n" || textString == "N") tex = getRandomListElement(n_textures)
-    if(textString == "i" || textString == "I") tex = getRandomListElement(i_textures)
-    if(textString == "x" || textString == "X") tex = getRandomListElement(x_textures)
+    letter = letter.toLowerCase()
+    let randStyle = rand(0,2)    // randomly chooses a style of letter - (0, 1, 2)
+    let tex = getListByLetter(letter)[randStyle]
 
     const geometry = new THREE.PlaneGeometry(1,1)
+    geometry.computeBoundingBox()
+    geometry.center()
+
     const material = new THREE.MeshBasicMaterial({ 
         map: tex, 
         transparent: true, 
@@ -421,13 +381,23 @@ function createLetterPlane(textString){
     })
     
     const mesh = new THREE.Mesh(geometry, material)
+    mesh.name = letter + "_letter"
     letters.push(mesh)
     scene.add(mesh)
-    mesh.scale.set(0.3, 0.3, 0.3)
-
+    
     mesh.position.x = xPositions[letterSpawnCount]
     letterSpawnCount++
     if(letterSpawnCount > xPositions.length) letterSpawnCount = 0
+
+    if(letter == "p" || letter == "P"){
+         mesh.scale.set(0.4, 0.4, 0.4)
+         mesh.position.y += 0.05
+    }
+    else mesh.scale.set(0.3, 0.3, 0.3)
+    
+    var start = new THREE.Vector3()
+    start.copy(mesh.position)
+    mesh.userData = { letter: letter, style: randStyle, startPos: start } // for randomising texture and position at runtime  
 
     const body = new CANNON.Body({
         mass: rand(1,5),
@@ -435,7 +405,9 @@ function createLetterPlane(textString){
         linearFactor: new CANNON.Vec3( 1, 1, 0),     //Restricts movement on z axis 
         angularDamping: 0.7
     })
-    body.addShape( new CANNON.Box(new CANNON.Vec3(0.1, 0.2, 0.1)))
+    //body.addShape( new CANNON.Box(new CANNON.Vec3(0.1, 0.2, 0.1)))
+
+    createHitbox(body, letter, randStyle)
 
     body.userData = { obj: mesh }
     body.allowSleep = true
@@ -453,6 +425,25 @@ function createLetterPlane(textString){
     body.position.copy(mesh.position)
     world.addBody(body)
     objectsToUpdate.push({ mesh, body })
+}
+
+function createHitbox(body, letter, type){
+    if(letter == "p"){
+
+        body.addShape( new CANNON.Box(new CANNON.Vec3(0.1, 0.2, 0.1)))
+
+        switch(type){
+            case 0:
+                break;
+            case 1:
+                break;
+            case 2:
+                break;
+        }
+    }
+    else{   // default rectangle shape
+        body.addShape( new CANNON.Box(new CANNON.Vec3(0.1, 0.15, 0.1)))
+    }
 }
 
 // function to create each letter, 
@@ -573,19 +564,12 @@ function sendCollisionMessage(col, position, intensity){
 function earthquake(){
     var impulse = new THREE.Vector3()
     objectsToUpdate.forEach(element => {
-        impulse = new THREE.Vector3(rand(-parameters.earthquakeForce,parameters.earthquakeForce), rand(5,parameters.earthquakeForce), 0)
+        impulse = new THREE.Vector3(rand(-parameters.earthquakeForce, parameters.earthquakeForce), rand(-parameters.earthquakeForce, parameters.earthquakeForce), 0)
         element.body.applyImpulse( impulse, CANNON.Vec3.ZERO )
     });
 }
 
-function resetLetterPosition(){
-    for(var i = 0; i < letters.length ; i++){
-        var pos = objectsToUpdate[i].mesh.userData.startPos
-        objectsToUpdate[i].body.position.set(pos.x, pos.y, pos.z)
-        objectsToUpdate[i].body.velocity.set(0,0,0)
-        objectsToUpdate[i].body.quaternion.setFromEuler(0,0,0, 'XYZ')
-    }
-}
+
 
 // Update /////
 const clock = new THREE.Clock()
@@ -672,8 +656,27 @@ function getRandomBGColour(){
 
 function resetAll(){
     resetLetterPosition()
-    randomiseAllFonts()
-    randomiseAllColours()
+    randomiseAllTextures()
+   // randomiseAllFonts()
+   // randomiseAllColours()
+}
+
+function resetLetterPosition(){
+    // reset the position of each body, as well as velocity, angle, and angular velocity
+    for(var i = 0; i < letters.length ; i++){
+        var pos = objectsToUpdate[i].mesh.userData.startPos
+        objectsToUpdate[i].body.position.set(pos.x, pos.y, pos.z)
+        objectsToUpdate[i].body.velocity.set(0,0,0)
+        objectsToUpdate[i].body.quaternion.setFromEuler(0,0,0, 'XYZ')
+        objectsToUpdate[i].body.angularVelocity.set(0,0,0)
+    }
+}
+
+function randomiseAllTextures(){
+    letters.forEach(element =>{
+        element.material.map = getTextureByLetter(element.userData.letter)
+        
+    })
 }
 
 function randomiseAllFonts(){
