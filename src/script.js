@@ -8,7 +8,7 @@ import { OrbitControls } from 'three/examples/jsm/controls/OrbitControls.js'
 import CannonDebugger from 'cannon-es-debugger'
 
 // vars /-/-/-/-/-/-/-/
-let helvetikerFont, loraFont, spaceMonoFont, fontsLoaded
+let helvetikerFont, loraFont, spaceMonoFont, fontsLoaded, styleNum
 let world, defaultMaterial, defaultContactMaterial, stonePhysMaterial, stoneContactMaterial, cannonDebugger
 let activeCamera
 let minX, maxX, minY, maxY  //Stores the min and max X and Y world postions of the edges of the screen
@@ -18,6 +18,7 @@ const fontsToLoad = 3
 
 let useOrtho = true
 let fontLoadFlag = false
+let canSendColMessage = true
 
 const objectsToUpdate = []
 const fonts = []
@@ -53,13 +54,17 @@ const parameters = {
     sendWebUSB: () => {
         clickSendWebUSB()
     },
-    cannonDebugEnabled: true,
+    toggleCumulative: () => {
+        sendCumulativeMessage()
+    },
+    cannonDebugEnabled: false,
     typeInput: false,
     mouseGravity: false,
     MBGravity: false,
     collisionVisualisation: false,
-    earthquakeForce: 0,
-    gravityLimit: 1
+    earthquakeForce: 2,
+    gravityLimit: 1,
+    LEDOffset: 0
 }
 
 const colours = [
@@ -80,13 +85,13 @@ const colours = [
 ]
 
 const bgColours = [
-    //new THREE.Color(0xBEB3B1),
-    //new THREE.Color(0xC3BBB0),
-    //new THREE.Color(0xCAC9C5),
+    new THREE.Color(0xBEB3B1),
+    new THREE.Color(0xC3BBB0),
+    new THREE.Color(0xCAC9C5),
     new THREE.Color(0x1B273F)       // dark blue
 ]
 
-const xPositions = [-1, -0.8, -0.6, -0.4, -0.2, 0, 0.2, 0.4, 0.6, 0.8, 1]   //List of x positions to cycle through when spawning letters with type input
+const xPositions = [-1, -0.7, -0.4, -0.1, 0.2, 0.5, 0.8, 1.1, 1.4, 1.7, 2]   //List of x positions to cycle through when spawning letters with type input
 
 // render /-/-/-/-/-/-/-/
 
@@ -103,7 +108,7 @@ renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2))
 // scene and cameras /-/-/-/-/-/-/-/
 
 const scene = new THREE.Scene()
-scene.background = getRandomBGColour()
+scene.background = getRandomListElement(bgColours)
 
 const orthoCamera = new THREE.OrthographicCamera(-1 * aspectRatio, 1 * aspectRatio, 1, -1, 0.1, 2)
 scene.add(orthoCamera)
@@ -156,14 +161,16 @@ gui.add(parameters, 'earthquake')
 gui.add(parameters, 'toggleCam')
 gui.add(parameters, 'randomise')
 gui.add(parameters, "connectWebUSB")
-gui.add(parameters, "sendWebUSB")
+gui.add(parameters, 'toggleCumulative')
+//gui.add(parameters, "sendWebUSB")
 gui.add(parameters, 'cannonDebugEnabled')
-gui.add(parameters, 'typeInput')
+//gui.add(parameters, 'typeInput')
 gui.add(parameters, 'collisionVisualisation')
 gui.add(parameters, 'mouseGravity').onChange( function(){setGravity(0,-1)})  // reset the gravity to default when toggled
 gui.add(parameters, 'MBGravity').onChange( function(){setGravity(0,-1)})
 gui.add(parameters, 'earthquakeForce').min(0).max(10).step(1)
 gui.add(parameters, 'gravityLimit').min(0).max(10).step(1)
+gui.add(parameters, 'LEDOffset').min(0).max(150).step(1)
 
 function initPhysics(){
     // Physics /////
@@ -229,7 +236,8 @@ function loadFonts(){   // load and store all fonts, called once
 }
 
 function loadTextures(){
-    for (var i = 0; i < 3; i++){    // 4 == number of sprites for each letter + 1
+    styleNum = 10
+    for (var i = 0; i < styleNum; i++){    // 3 == number of styles for each letter
         p_textures.push(texLoader.load('sprites/p/' + i + '.png'))
         h_textures.push(texLoader.load('sprites/h/' + i + '.png'))
         o_textures.push(texLoader.load('sprites/o/' + i + '.png'))
@@ -250,13 +258,13 @@ function loadTextures(){
 
 function onFontsLoaded(){
     if(!parameters.typeInput){
-        //createLetter("P", getRandomFont(), new THREE.Vector3(-1.2, 0, 0))
-        //createLetter("h", getRandomFont(), new THREE.Vector3(0, 0, 0))
-        //createLetter("o", getRandomFont(), new THREE.Vector3(0.2, 0, 0))
-        //createLetter("e", getRandomFont(), new THREE.Vector3(0.2, 0, 0))
-        //createLetter("n", getRandomFont(), new THREE.Vector3(0.2, 0, 0))
-        //createLetter("i", getRandomFont(), new THREE.Vector3(0.2, 0, 0))
-        //createLetter("x", getRandomFont(), new THREE.Vector3(0.2, 0, 0))
+        //createLetter("P", getRandomListElement(fonts), new THREE.Vector3(-1.2, 0, 0))
+        //createLetter("h", getRandomListElement(fonts), new THREE.Vector3(0, 0, 0))
+        //createLetter("o", getRandomListElement(fonts), new THREE.Vector3(0.2, 0, 0))
+        //createLetter("e", getRandomListElement(fonts), new THREE.Vector3(0.2, 0, 0))
+        //createLetter("n", getRandomListElement(fonts), new THREE.Vector3(0.2, 0, 0))
+        //createLetter("i", getRandomListElement(fonts), new THREE.Vector3(0.2, 0, 0))
+        //createLetter("x", getRandomListElement(fonts), new THREE.Vector3(0.2, 0, 0))
     }
 }
 
@@ -266,24 +274,26 @@ function getRandomListElement(list){
 }
 
 function getTextureByLetter(letter){
-    if(letter == "p" || letter == "P") return getRandomListElement(p_textures)
-    if(letter == "h" || letter == "H") return getRandomListElement(h_textures)
-    if(letter == "o" || letter == "O") return getRandomListElement(o_textures)
-    if(letter == "e" || letter == "E") return getRandomListElement(e_textures)
-    if(letter == "n" || letter == "N") return getRandomListElement(n_textures)
-    if(letter == "i" || letter == "I") return getRandomListElement(i_textures)
-    if(letter == "x" || letter == "X") return getRandomListElement(x_textures)
+    letter = letter.toLowerCase()
+    if(letter == "p") return getRandomListElement(p_textures)
+    else if(letter == "h") return getRandomListElement(h_textures)
+    else if(letter == "o") return getRandomListElement(o_textures)
+    else if(letter == "e") return getRandomListElement(e_textures)
+    else if(letter == "n") return getRandomListElement(n_textures)
+    else if(letter == "i") return getRandomListElement(i_textures)
+    else if(letter == "x") return getRandomListElement(x_textures)
     else return null
 }
 
 function getListByLetter(letter){
-    if(letter == "p" || letter == "P") return p_textures
-    if(letter == "h" || letter == "H") return h_textures
-    if(letter == "o" || letter == "O") return o_textures
-    if(letter == "e" || letter == "E") return e_textures
-    if(letter == "n" || letter == "N") return n_textures
-    if(letter == "i" || letter == "I") return i_textures
-    if(letter == "x" || letter == "X") return x_textures
+    letter = letter.toLowerCase()
+    if(letter == "p") return p_textures
+    else if(letter == "h") return h_textures
+    else if(letter == "o") return o_textures
+    else if(letter == "e") return e_textures
+    else if(letter == "n") return n_textures
+    else if(letter == "i") return i_textures
+    else if(letter == "x") return x_textures
     else return null
 }
 
@@ -307,7 +317,7 @@ function createLetter(textString, font, position){
     textGeometry.computeBoundingBox()
     textGeometry.center()
 
-    const mat = new THREE.MeshBasicMaterial( { color: getRandomColour() })
+    const mat = new THREE.MeshBasicMaterial( { color: getRandomListElement(colours) })
     
     const mesh = new THREE.Mesh(textGeometry, mat)
     mesh.name = textString + "_letter"
@@ -367,7 +377,7 @@ createLetterPlane("x")
 function createLetterPlane(letter){
 
     letter = letter.toLowerCase()
-    let randStyle = rand(0,2)    // randomly chooses a style of letter - (0, 1, 2)
+    let randStyle = rand(0, styleNum - 1)    // randomly chooses a style of letter - (0, 1, 2, 3)
     let tex = getListByLetter(letter)[randStyle]
 
     const geometry = new THREE.PlaneGeometry(1,1)
@@ -377,7 +387,7 @@ function createLetterPlane(letter){
     const material = new THREE.MeshBasicMaterial({ 
         map: tex, 
         transparent: true, 
-        color: getRandomColour() 
+        color: getRandomListElement(colours) 
     })
     
     const mesh = new THREE.Mesh(geometry, material)
@@ -428,6 +438,7 @@ function createLetterPlane(letter){
 }
 
 function createHitbox(body, letter, type){
+    letter = letter.toLowerCase()
     if(letter == "p"){
 
         body.addShape( new CANNON.Box(new CANNON.Vec3(0.1, 0.2, 0.1)))
@@ -490,11 +501,7 @@ function calculateScreenEdgePositon(){
     maxY = Math.max(worldTopLeft.y, worldTopRight.y, worldBottomLeft.y, worldBottomRight.y);
 
     // Log the screen edges
-    //console.log("Min X:", minX);
-    //console.log("Max X:", maxX);
-    //console.log("Min Y:", minY);
-    //console.log("Max Y:", maxY);
-
+    //console.log("Min X:", minX, "  Max X:", maxX, "  Min Y:", minY, "  Max Y:", maxY);
 }
 
 function createStaticBox(position, size = {x:1, y:1, z:1}, vertical){
@@ -515,32 +522,61 @@ function createStaticBox(position, size = {x:1, y:1, z:1}, vertical){
     body.addEventListener('collide', edgeCollision)
 }
 
+function clamp(num, min, max) { return Math.min(Math.max(num, min), max) }
+
 function edgeCollision(collision){
-    //console.log(collision.contact)
+
     let velocity = collision.contact.getImpactVelocityAlongNormal()
-   
     let position = new THREE.Vector3(collision.contact.bi.position.x + collision.contact.ri.x, collision.contact.bi.position.y + collision.contact.ri.y, 0) // world position of impact
+    let colour = getRandomListElement(colours)
+
+    let intensity = clamp(velocity, 0, 2)
+    intensity = normaliseInRange(intensity, 0, 2, 50, 255).toFixed(0)
+
+    //console.log(position)
+    let strip_pos = 0
+
+    if(position.x > 0 && position.y < 0){   // bottom right 
+        strip_pos = normaliseInRange(position.x, 0, maxX, 0, 18)
+        console.log("bottom right")
+    }
+    else if(position.x.toFixed(1) == maxX.toFixed(1)){   // right
+        strip_pos = normaliseInRange(position.y, minY, maxY, 18, 38)
+        console.log("right")
+    }
+    else if(position.y.toFixed(1) == maxY.toFixed(1)){  // top
+        strip_pos = normaliseInRange(position.x, maxX, minX, 38, 73)
+        console.log("top")
+    }
+    else if(position.x.toFixed(1) == minX.toFixed(1)){  // left
+        strip_pos = normaliseInRange(position.y, maxY, minY, 73, 93)
+        console.log("left")
+    }
+    else if(position.x < 0 && position.y < 0){          // bottom left
+        strip_pos = normaliseInRange(position.x, minX, 0, 93, 111)
+        console.log("bottom left")
+    }
+    strip_pos = strip_pos.toFixed(0)
+    //strip_pos = strip_pos + parameters.LEDOffset
+    //console.log("pos: "+ strip_pos)
+    if(strip_pos > 150) strip_pos = 150
+
+    console.log(strip_pos)
+    
+    if(collision.contact.bi.userData != null){      // if it can get the collision object (sometimes it cant???), set the colour to the letter colour
+        let collisionObj = collision.contact.bi.userData.obj
+        colour = collisionObj.material.color
+    }
+    
+    if(canSendColMessage) sendCollisionMessage(colour, strip_pos, intensity)
+    canSendColMessage = false
+    setTimeout(function(){canSendColMessage = true}, 1000)      //set delay between sending collision messages so that multiple messages aren't sent for one collision
 
     if(parameters.collisionVisualisation){  // if true, spawn a sphere on collision points
         const geo = new THREE.SphereGeometry(velocity/15)
         const mesh = new THREE.Mesh(geo, new THREE.MeshNormalMaterial())
         mesh.position.set(position.x, position.y, 0)
         scene.add(mesh)
-    }
-
-    //calculate which led to light up using position
-    //send message to microbit with LED index and brightness (just index to begin)
-
-    if(collision.contact.bi.userData != null){
-        var collisionObj = collision.contact.bi.userData.obj
-        //console.log(collisionObj)
-
-        var colour = collisionObj.material.color
-        
-        //sendCollisionMessage(colour, 10, 255)
-    }
-    else{
-        //console.log("no user data")
     }
 }
 
@@ -550,15 +586,28 @@ function sendCollisionMessage(col, position, intensity){
     var g = Math.round(col.g * 255)
     var b = Math.round(col.b * 255)
 
-    var message = r + "," + g + "," + b + "," + Math.round(position) + "," + intensity + "|"
+    var message = r + "," + g + "," + b + "," + position + "," + intensity + "|"
+    var debugMessage = "r:" + r + ", g:" + g + ", b:" + b + ", pos:" + position + ", i:" + intensity + "|"
+
     if(connectedDevices.length > 0){
+        console.log(connectedDevices)
         uBitSend(connectedDevices[0], message)
         console.log("Sent collision message: " + message)
     }
     else{
-        console.log("Failed to send message: " + message + ". No connected devices")
+        console.log("Failed to send message: " + debugMessage + ". No connected devices")
     }
 
+}
+
+function sendCumulativeMessage(){
+    if(connectedDevices.length > 0){
+        uBitSend(connectedDevices[0], "c#")
+        console.log("Send cumulative mode toggle message")
+    }
+    else{
+        console.log("Failed to send cumulative mode message. No connected devices")
+    }
 }
 
 function earthquake(){
@@ -568,8 +617,6 @@ function earthquake(){
         element.body.applyImpulse( impulse, CANNON.Vec3.ZERO )
     });
 }
-
-
 
 // Update /////
 const clock = new THREE.Clock()
@@ -637,23 +684,6 @@ function updateCamType(){
     }
 }
 
-function getRandomColour(){
-    var rand = Math.floor(Math.random() * Object.keys(colours).length)
-    var randColour = colours[Object.keys(colours)[rand]]
-    return randColour
-}
-
-function getRandomFont(){
-    var rand = Math.floor(Math.random() * fonts.length )
-    return fonts[rand]
-}
-
-function getRandomBGColour(){
-    var rand = Math.floor(Math.random() * Object.keys(bgColours).length)
-    var randColour = bgColours[Object.keys(bgColours)[rand]]
-    return randColour
-}
-
 function resetAll(){
     resetLetterPosition()
     randomiseAllTextures()
@@ -675,8 +705,20 @@ function resetLetterPosition(){
 function randomiseAllTextures(){
     letters.forEach(element =>{
         element.material.map = getTextureByLetter(element.userData.letter)
-        
+        element.material.color = getRandomListElement(colours)
     })
+}
+
+function setAllStyles(i){       // Set all the letters to a certain style
+    letters.forEach(element => {
+        element.material.map = getListByLetter(element.userData.letter)[i]
+    });
+}
+
+function setAllColours(colour){
+    letters.forEach(element => {
+        element.material.color = colour
+    });
 }
 
 function randomiseAllFonts(){
@@ -685,7 +727,7 @@ function randomiseAllFonts(){
         let newGeo = new TextGeometry(
             element.userData.letter,
             {
-                font: getRandomFont(),
+                font: getRandomListElement(fonts),
                 size: 0.35,
                 height: 0.02,
                 curveSegments: 12,
@@ -706,7 +748,7 @@ function randomiseAllFonts(){
 
 function randomiseAllColours(){
     letters.forEach(element => {
-        let newMat = new THREE.MeshBasicMaterial( { color: getRandomColour() })
+        let newMat = new THREE.MeshBasicMaterial( { color: getRandomListElement(colours) })
 
         element.material.dispose()
         element.material = newMat
@@ -727,15 +769,16 @@ window.addEventListener('keydown', function(event) {
     else if(event.key.charCodeAt(0) >= 65 && event.key.charCodeAt(0) <= 90){    //If input is A-Z (Upper case)
         //createLetter(event.key, randomFont(), new THREE.Vector3(0,0,0))
     }
-    if(parameters.typeInput) createLetter(event.key, getRandomFont(), new THREE.Vector3(0,0,0))    //if type input is enabled, create letter with the input
+    if(parameters.typeInput) createLetter(event.key, getRandomListElement(fonts), new THREE.Vector3(0,0,0))    //if type input is enabled, create letter with the input
 
     if(event.key.charCodeAt(0) >= 48 && event.key.charCodeAt(0) <= 57){     // if input is a number key, send it to microbit with delimiter
-        console.log("Sending keycode: " + event.key + "|")
-        uBitSend(connectedDevices[0], event.key + "|")
+        //console.log("Sending keycode: " + event.key + "|")
+        //uBitSend(connectedDevices[0], event.key + "|")
+        setAllStyles(event.key)
     }
 
     if(event.key.charCodeAt(0) == 32){      // space bar        
-        sendCollisionMessage(new THREE.Color(Math.random(), Math.random(), Math.random()), Math.random() * 30, 255)
+        sendCollisionMessage(new THREE.Color(Math.random(), Math.random(), Math.random()), (Math.random() * 150).toFixed(0), 255)
     }
 })
 
