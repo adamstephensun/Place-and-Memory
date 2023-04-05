@@ -586,13 +586,12 @@ function sendCollisionMessage(col, position, intensity){
     var g = Math.round(col.g * 255)
     var b = Math.round(col.b * 255)
 
-    var message = r + "," + g + "," + b + "," + position + "," + intensity + "|"
-    var debugMessage = "r:" + r + ", g:" + g + ", b:" + b + ", pos:" + position + ", i:" + intensity + "|"
+    var message = r + "," + g + "," + b + "," + position + "," + intensity + "#"
+    var debugMessage = "r:" + r + ", g:" + g + ", b:" + b + ", pos:" + position + ", i:" + intensity + "#"
 
-    if(connectedDevices.length > 0){
-        console.log(connectedDevices)
+    if(connectedDevices.length > 0){        
         uBitSend(connectedDevices[0], message)
-        console.log("Sent collision message: " + message)
+        console.log("Sent collision message: '" + message+"'")
     }
     else{
         console.log("Failed to send message: " + debugMessage + ". No connected devices")
@@ -602,7 +601,7 @@ function sendCollisionMessage(col, position, intensity){
 
 function sendCumulativeMessage(){
     if(connectedDevices.length > 0){
-        uBitSend(connectedDevices[0], "c#")
+        uBitSend(connectedDevices[0], "c;")
         console.log("Send cumulative mode toggle message")
     }
     else{
@@ -863,7 +862,7 @@ async function parseMBData(packet){
             break
         case "b":
             // b button pressed
-
+            setAllStyles(data)
             break
         case "c":
             // c button pressed
