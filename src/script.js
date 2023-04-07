@@ -6,15 +6,16 @@ import { FontLoader } from 'three/examples/jsm/loaders/FontLoader.js'
 import { TextGeometry } from 'three/examples/jsm/geometries/TextGeometry.js'
 import { OrbitControls } from 'three/examples/jsm/controls/OrbitControls.js'
 import CannonDebugger from 'cannon-es-debugger'
+import './ubitwebusb.js'
 
 // vars /-/-/-/-/-/-/-/
-let helvetikerFont, loraFont, spaceMonoFont, fontsLoaded, styleNum
+let helvetikerFont, loraFont, spaceMonoFont, futuraFont, fontsLoaded, styleNum
 let world, defaultMaterial, defaultContactMaterial, stonePhysMaterial, stoneContactMaterial, cannonDebugger
 let activeCamera
 let minX, maxX, minY, maxY  //Stores the min and max X and Y world postions of the edges of the screen
 let sleepingBodies = 0
 
-const fontsToLoad = 3
+const fontsToLoad = 4
 
 let useOrtho = true
 let fontLoadFlag = false
@@ -24,6 +25,8 @@ const objectsToUpdate = []
 const fonts = []
 const letters  = []
 const textures = []     // list of lists of textures
+const opsTutorialStrings = []
+const userTutorialStrings = []
 
 const p_textures = []
 const h_textures = []
@@ -136,7 +139,7 @@ const mat = new THREE.MeshBasicMaterial({ color: colours[2] })
 
 // init calls /-/-/-/-/-/-/-/
 initPhysics()
-//loadFonts()
+loadFonts()
 loadTextures()
 
 // Sounds /////
@@ -233,6 +236,15 @@ function loadFonts(){   // load and store all fonts, called once
         fontsLoaded++
         if(fontsLoaded == fontsToLoad) fontLoadFlag = true
     })
+
+    fontLoader.load("fonts/Futura Md BT_Medium.json", (font) => {
+        console.log("Futura font loaded")
+
+        futuraFont = font
+        fonts.push(futuraFont)
+        fontsLoaded++
+        if(fontsLoaded == fontsToLoad) fontLoadFlag = true
+    })
 }
 
 function loadTextures(){
@@ -266,6 +278,8 @@ function onFontsLoaded(){
         //createLetter("i", getRandomListElement(fonts), new THREE.Vector3(0.2, 0, 0))
         //createLetter("x", getRandomListElement(fonts), new THREE.Vector3(0.2, 0, 0))
     }
+
+    //opsTutorialStrings.push(createTextString("Hello world!", 0.1, new THREE.Vector3(0,0,0)))
 }
 
 function getRandomListElement(list){
@@ -299,6 +313,7 @@ function getListByLetter(letter){
 
 var letterSpawnCount = 0
 function createLetter(textString, font, position){
+
     const size = 0.35
     const textGeometry = new TextGeometry(
         textString,
@@ -364,6 +379,32 @@ function createLetter(textString, font, position){
     objectsToUpdate.push({ mesh, body })
 
     //body.addEventListener('collide', edgeCollision)
+}
+
+function createTextString(text, size, position){
+    const textGeo = new TextGeometry(
+        text,
+        {
+            font: futuraFont,
+            size: size,
+            height: 0.02,
+            curveSegments: 12,
+            bevelEnabled: true,
+            bevelThickness: 0.001,
+            bevelSize: 0.002,
+            bevelOffset: 0,
+            bevelSegments: 5
+        }
+    )
+
+    textGeo.computeBoundingBox()
+    textGeo.center()
+
+    const mesh = new THREE.Mesh(textGeo, mat)
+    mesh.position.copy(position)
+    scene.add(mesh)
+
+    return mesh
 }
 
 createLetterPlane("p")
@@ -531,7 +572,7 @@ function edgeCollision(collision){
     let colour = getRandomListElement(colours)
 
     let intensity = clamp(velocity, 0, 2)
-    intensity = normaliseInRange(intensity, 0, 2, 50, 255).toFixed(0)
+    intensity = normaliseInRange(intensity, 0, 2, 150, 255).toFixed(0)
 
     //console.log(position)
     let strip_pos = 0
@@ -814,6 +855,7 @@ window.addEventListener('resize', () =>
 
 async function clickConnectWebUSB(){
     uBitConnectDevice(uBitEventHandler)
+    
 }
 
 async function clickSendWebUSB(){
