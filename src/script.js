@@ -6,7 +6,8 @@ import { FontLoader } from 'three/examples/jsm/loaders/FontLoader.js'
 import { TextGeometry } from 'three/examples/jsm/geometries/TextGeometry.js'
 import { OrbitControls } from 'three/examples/jsm/controls/OrbitControls.js'
 import CannonDebugger from 'cannon-es-debugger'
-import './ubitwebusb.js'
+import { WebUSB, DAPLink } from 'dapjs'
+//import * as DAPjs from 'dapjs/types/index.d.ts'
 
 // vars /-/-/-/-/-/-/-/
 let helvetikerFont, loraFont, spaceMonoFont, futuraFont, fontsLoaded, styleNum
@@ -20,6 +21,7 @@ const fontsToLoad = 4
 let useOrtho = true
 let fontLoadFlag = false
 let canSendColMessage = true
+let mbConnectedFirstTime = false
 
 const objectsToUpdate = []
 const fonts = []
@@ -65,7 +67,7 @@ const parameters = {
     mouseGravity: false,
     MBGravity: false,
     collisionVisualisation: false,
-    earthquakeForce: 2,
+    earthquakeForce: 0,
     gravityLimit: 1,
     LEDOffset: 0
 }
@@ -91,7 +93,7 @@ const bgColours = [
     new THREE.Color(0xBEB3B1),
     new THREE.Color(0xC3BBB0),
     new THREE.Color(0xCAC9C5),
-    new THREE.Color(0x1B273F)       // dark blue
+    //new THREE.Color(0x1B273F)       // dark blue
 ]
 
 const xPositions = [-1, -0.7, -0.4, -0.1, 0.2, 0.5, 0.8, 1.1, 1.4, 1.7, 2]   //List of x positions to cycle through when spawning letters with type input
@@ -158,22 +160,23 @@ const playHitSound = (collision) =>
 }
 
 // debug /-/-/-/-/-/-/-/
-const gui = new dat.GUI()
+const debugGui = new dat.GUI()          // debug gui contains stuff for testing purposes
+const deploymentGui = new dat.GUI()     // deployment gui contains just the connectWebUSB button for ease of use for operations team
+debugGui.hide()
 
-gui.add(parameters, 'earthquake')
-gui.add(parameters, 'toggleCam')
-gui.add(parameters, 'randomise')
-gui.add(parameters, "connectWebUSB")
-gui.add(parameters, 'toggleCumulative')
-//gui.add(parameters, "sendWebUSB")
-gui.add(parameters, 'cannonDebugEnabled')
-//gui.add(parameters, 'typeInput')
-gui.add(parameters, 'collisionVisualisation')
-gui.add(parameters, 'mouseGravity').onChange( function(){setGravity(0,-1)})  // reset the gravity to default when toggled
-gui.add(parameters, 'MBGravity').onChange( function(){setGravity(0,-1)})
-gui.add(parameters, 'earthquakeForce').min(0).max(10).step(1)
-gui.add(parameters, 'gravityLimit').min(0).max(10).step(1)
-gui.add(parameters, 'LEDOffset').min(0).max(150).step(1)
+deploymentGui.add(parameters, "connectWebUSB")
+
+debugGui.add(parameters, 'earthquake')
+debugGui.add(parameters, 'toggleCam')
+debugGui.add(parameters, 'randomise')
+debugGui.add(parameters, 'toggleCumulative')
+debugGui.add(parameters, 'cannonDebugEnabled')
+debugGui.add(parameters, 'collisionVisualisation')
+debugGui.add(parameters, 'mouseGravity').onChange( function(){setGravity(0,-1)})  // reset the gravity to default when toggled
+debugGui.add(parameters, 'MBGravity').onChange( function(){setGravity(0,-1)})
+debugGui.add(parameters, 'earthquakeForce').min(0).max(10).step(1)
+debugGui.add(parameters, 'gravityLimit').min(0).max(10).step(1)
+debugGui.add(parameters, 'LEDOffset').min(0).max(150).step(1)
 
 function initPhysics(){
     // Physics /////
@@ -279,7 +282,15 @@ function onFontsLoaded(){
         //createLetter("x", getRandomListElement(fonts), new THREE.Vector3(0.2, 0, 0))
     }
 
-    //opsTutorialStrings.push(createTextString("Hello world!", 0.1, new THREE.Vector3(0,0,0)))
+    opsTutorialStrings.push(createTextString("1. Ensure that microbit is \n plugged in and lights are on", 0.08, new THREE.Vector3(0.5,-0.5,0)))
+    opsTutorialStrings.push(createTextString("2. Click connectWebUSB button -->", 0.08, new THREE.Vector3(0.58,0.77,0)))
+    opsTutorialStrings.push(createTextString("<-- 3. Select BBC micro:bit \n and click connect", 0.08, new THREE.Vector3(-0.15,0.4,0)))
+    opsTutorialStrings.push(createTextString("4. Place microbit on stand", 0.08, new THREE.Vector3(0,-0.4,0)))
+    opsTutorialStrings.push(createTextString("Microbit disconnected. Connect USB \n cable and restablish connection -->", 0.08, new THREE.Vector3(0.58,0.77,0)))
+
+    opsTutorialStrings[2].visible = false
+    opsTutorialStrings[3].visible = false
+    opsTutorialStrings[4].visible = false
 }
 
 function getRandomListElement(list){
@@ -463,7 +474,7 @@ function createLetterPlane(letter){
     body.userData = { obj: mesh }
     body.allowSleep = true
     body.sleepSpeedLimit = 0.1      // body will feel sleepy if normalised velocity < 0.1
-    body.sleepTimeLimit = 10        //body will sleep after 10 seconds
+    body.sleepTimeLimit = 15        //body will sleep after 10 seconds
     body.addEventListener('sleep', function(event){
         sleepingBodies++
         console.log("num of sleeping bodies: " + sleepingBodies)
@@ -578,31 +589,29 @@ function edgeCollision(collision){
     let strip_pos = 0
 
     if(position.x > 0 && position.y < 0){   // bottom right 
-        strip_pos = normaliseInRange(position.x, 0, maxX, 0, 18)
+        strip_pos = normaliseInRange(position.x, 0, maxX, 0, 17)
         console.log("bottom right")
     }
     else if(position.x.toFixed(1) == maxX.toFixed(1)){   // right
-        strip_pos = normaliseInRange(position.y, minY, maxY, 18, 38)
+        strip_pos = normaliseInRange(position.y, minY, maxY, 17, 35)
         console.log("right")
     }
     else if(position.y.toFixed(1) == maxY.toFixed(1)){  // top
-        strip_pos = normaliseInRange(position.x, maxX, minX, 38, 73)
+        strip_pos = normaliseInRange(position.x, maxX, minX, 35, 68)
         console.log("top")
     }
     else if(position.x.toFixed(1) == minX.toFixed(1)){  // left
-        strip_pos = normaliseInRange(position.y, maxY, minY, 73, 93)
+        strip_pos = normaliseInRange(position.y, maxY, minY, 68, 86)
         console.log("left")
     }
     else if(position.x < 0 && position.y < 0){          // bottom left
-        strip_pos = normaliseInRange(position.x, minX, 0, 93, 111)
+        strip_pos = normaliseInRange(position.x, minX, 0, 86, 101)
         console.log("bottom left")
     }
     strip_pos = strip_pos.toFixed(0)
     //strip_pos = strip_pos + parameters.LEDOffset
-    //console.log("pos: "+ strip_pos)
-    if(strip_pos > 150) strip_pos = 150
-
-    console.log(strip_pos)
+    console.log("pos: "+ strip_pos)
+    //if(strip_pos > 150) strip_pos = 150
     
     if(collision.contact.bi.userData != null){      // if it can get the collision object (sometimes it cant???), set the colour to the letter colour
         let collisionObj = collision.contact.bi.userData.obj
@@ -611,7 +620,7 @@ function edgeCollision(collision){
     
     if(canSendColMessage) sendCollisionMessage(colour, strip_pos, intensity)
     canSendColMessage = false
-    setTimeout(function(){canSendColMessage = true}, 1000)      //set delay between sending collision messages so that multiple messages aren't sent for one collision
+    setTimeout(function(){canSendColMessage = true}, 700)      //set delay between sending collision messages so that multiple messages aren't sent for one collision
 
     if(parameters.collisionVisualisation){  // if true, spawn a sphere on collision points
         const geo = new THREE.SphereGeometry(velocity/15)
@@ -632,7 +641,7 @@ function sendCollisionMessage(col, position, intensity){
 
     if(connectedDevices.length > 0){        
         uBitSend(connectedDevices[0], message)
-        console.log("Sent collision message: '" + message+"'")
+        //console.log("Sent collision message: '" + message+"'")
     }
     else{
         console.log("Failed to send message: " + debugMessage + ". No connected devices")
@@ -699,6 +708,12 @@ const tick = () =>
         //maybe add randomness here
     }
 
+    if(mbConnectedFirstTime && connectedDevices == 0){
+        console.log("Microbit disconnected.")
+        deploymentGui.show()
+        opsTutorialStrings[4].visible = true
+    }
+
     if(parameters.cannonDebugEnabled) cannonDebugger.update()
 
     // Render
@@ -712,6 +727,19 @@ tick()
 
 function rand(min, max){    // inclusive
     return Math.floor(Math.random() * (max - min + 1) + min)
+}
+
+function deviceConnected(){
+    opsTutorialStrings[2].visible = false
+    opsTutorialStrings[3].visible = true
+
+    setTimeout(function(){
+        opsTutorialStrings[3].visible = false
+        parameters.earthquakeForce = 2
+        parameters.MBGravity = true
+        parameters.mouseGravity = false
+        deploymentGui.hide()
+    }, 20000)
 }
 
 function updateCamType(){
@@ -854,8 +882,12 @@ window.addEventListener('resize', () =>
 ///////// Microbit stuff /////////
 
 async function clickConnectWebUSB(){
+    console.log("connect")
     uBitConnectDevice(uBitEventHandler)
     
+    opsTutorialStrings[0].visible = false
+    opsTutorialStrings[1].visible = false
+    opsTutorialStrings[2].visible = true
 }
 
 async function clickSendWebUSB(){
@@ -955,3 +987,162 @@ function uBitEventHandler(reason, device, data){
 function normaliseInRange(val, oldMin, oldMax, newMin, newMax){
     return newMin + (val - oldMin) * (newMax - newMin) / (oldMax - oldMin)
 }
+
+/////////////////UBIT///////////////////
+
+
+/*
+ * JavaScript functions for interacting with micro:bit microcontrollers over WebUSB
+ * (Only works in Chrome browsers;  Pages must be either HTTPS or local)
+ */
+
+
+const MICROBIT_VENDOR_ID = 0x0d28
+const MICROBIT_PRODUCT_ID = 0x0204
+
+/*
+   Open and configure a selected device and then start the read-loop
+ */
+async function uBitOpenDevice(device, callback) {
+    const transport = new WebUSB(device)
+    const target = new DAPLink(transport)
+    let buffer=""                               // Buffer of accumulated messages
+    const parser = /([^.:]*)\.*([^:]+|):(.*)/   // Parser to identify time-series format (graph:info or graph.series:info)
+        
+    target.on(DAPLink.EVENT_SERIAL_DATA, data => {
+        buffer += data;
+        let firstNewline = buffer.indexOf("\n")
+        while(firstNewline>=0) {
+            let messageToNewline = buffer.slice(0,firstNewline)
+            let now = new Date() 
+            // Deal with line
+            // If it's a graph/series format, break it into parts
+            let parseResult = parser.exec(messageToNewline)
+            if(parseResult) {
+                let graph = parseResult[1]
+                let series = parseResult[2]
+                let data = parseResult[3]
+                let callbackType = "graph-event"
+                // If data is numeric, it's a data message and should be sent as numbers
+                if(!isNaN(data)) {
+                    callbackType = "graph-data"
+                    data = parseFloat(data)
+                }
+                // Build and send the bundle
+                let dataBundle = {
+                    time: now,
+                    graph: graph, 
+                    series: series, 
+                    data: data
+                }
+                callback(callbackType, device, dataBundle)
+            } else {
+                // Not a graph format.  Send it as a console bundle
+                let dataBundle = {time: now, data: messageToNewline}
+                callback("console", device, dataBundle)
+            }
+            buffer = buffer.slice(firstNewline+1)  // Advance to after newline
+            firstNewline = buffer.indexOf("\n")    // See if there's more data
+        }
+    });
+    await target.connect();
+    await target.setSerialBaudrate(115200)
+    //await target.disconnect();
+    device.target = target;   // Store the target in the device object (needed for write)
+    device.callback = callback // Store the callback for the device
+    callback("connected", device, null)    
+    target.startSerialRead()
+    deviceConnected()
+    mbConnectedFirstTime = true             // flag for the MB being connected for the first time
+    opsTutorialStrings[4].visible = false   //remove warning message for when MB gets disconnected
+    return Promise.resolve()
+}
+
+
+/**
+ * Disconnect from a device 
+ * @param {USBDevice} device to disconnect from 
+ */
+async function uBitDisconnect(device) {
+    if(device) {
+        try {
+            await device.target.stopSerialRead()
+        } catch(error) {
+            // Failure may mean already stopped
+        }
+        try {
+            await device.target.disconnect()
+        } catch(error) {
+            // Failure may mean already disconnected
+        }
+        try {
+            await device.close()
+        } catch(error) {
+            // Failure may mean already closed
+        }
+        // Call the callback with notification of disconnect
+        device.callback("disconnected", device, null)
+        device.callback = null
+        device.target = null
+    }
+}
+
+/**
+ * Send a string to a specific device
+ * @param {USBDevice} device 
+ * @param {string} data to send (must not include newlines)
+ */
+function uBitSend(device, data) {
+    if(!device.opened)
+        return
+    let fullLine = data+'\n'
+    device.target.serialWrite(fullLine)
+}
+
+
+/**
+ * Callback for micro:bit events
+ * 
+ 
+   Event data varies based on the event string:
+  <ul>
+   <li>"connection failure": null</li>
+   <li>"connected": null</li>
+   <li>"disconnected": null</li>
+   <li>"error": error object</li>
+   <li>"console":  { "time":Date object "data":string}</li>
+   <li>"graph-data": { "time":Date object "graph":string "series":string "data":number}</li>
+   <li>"graph-event": { "time":Date object "graph":string "series":string "data":string}</li>
+  </ul>
+
+ * @callback uBitEventCallback
+ * @param {string} event ("connection failure", "connected", "disconnected", "error", "console", "graph-data", "graph-event" )
+ * @param {USBDevice} device triggering the callback
+ * @param {*} data (event-specific data object). See list above for variants
+ * 
+ */
+
+
+/**
+ * Allow users to select a device to connect to.
+ * 
+ * @param {uBitEventCallback} callback function for device events
+ */
+function uBitConnectDevice(callback) { 
+    navigator.usb.requestDevice({filters: [{ vendorId: MICROBIT_VENDOR_ID, productId: MICROBIT_PRODUCT_ID }]})
+        .then(  d => { if(!d.opened) uBitOpenDevice(d, callback)} )
+        .catch( () => callback("connection failure", null, null))
+    
+}
+
+//stackoverflow.com/questions/5892845/how-to-load-one-javascript-file-from-another
+var newScript = document.createElement('script');
+newScript.type = 'text/javascript';
+newScript.src = 'dap.umd.js';
+document.getElementsByTagName('head')[0].appendChild(newScript);
+
+navigator.usb.addEventListener('disconnect', (event) => {
+    if("device" in event && "callback" in event.device && event.device.callback!=null && event.device.productName.includes("micro:bit")) {
+        uBitDisconnect(event.device)
+    }
+ })
