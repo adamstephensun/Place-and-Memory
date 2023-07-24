@@ -69,7 +69,10 @@ const parameters = {
     collisionVisualisation: false,
     earthquakeForce: 0,
     gravityLimit: 1,
-    LEDOffset: 0
+    LEDOffset: 0,
+    homeVersion: () => {
+        enableHomeVersion()
+    }
 }
 
 const colours = [
@@ -165,6 +168,7 @@ const deploymentGui = new dat.GUI()     // deployment gui contains just the conn
 debugGui.hide()
 
 deploymentGui.add(parameters, "connectWebUSB")
+deploymentGui.add(parameters, 'homeVersion')
 
 debugGui.add(parameters, 'earthquake')
 debugGui.add(parameters, 'toggleCam')
@@ -177,6 +181,7 @@ debugGui.add(parameters, 'MBGravity').onChange( function(){setGravity(0,-1)})
 debugGui.add(parameters, 'earthquakeForce').min(0).max(10).step(1)
 debugGui.add(parameters, 'gravityLimit').min(0).max(10).step(1)
 debugGui.add(parameters, 'LEDOffset').min(0).max(150).step(1)
+
 
 function initPhysics(){
     // Physics /////
@@ -252,7 +257,7 @@ function loadFonts(){   // load and store all fonts, called once
 
 function loadTextures(){
     styleNum = 10
-    for (var i = 0; i < styleNum; i++){    // 3 == number of styles for each letter
+    for (var i = 0; i < styleNum; i++){    // i == number of styles for each letter
         p_textures.push(texLoader.load('sprites/p/' + i + '.png'))
         h_textures.push(texLoader.load('sprites/h/' + i + '.png'))
         o_textures.push(texLoader.load('sprites/o/' + i + '.png'))
@@ -734,12 +739,16 @@ function deviceConnected(){
     opsTutorialStrings[3].visible = true
 
     setTimeout(function(){
-        opsTutorialStrings[3].visible = false
-        parameters.earthquakeForce = 2
-        parameters.MBGravity = true
-        parameters.mouseGravity = false
-        deploymentGui.hide()
+        enable(false)
     }, 20000)
+}
+
+function enable(homeVersion){
+    opsTutorialStrings[3].visible = false
+    parameters.earthquakeForce = 2
+    parameters.MBGravity = !homeVersion
+    parameters.mouseGravity = homeVersion
+    deploymentGui.hide()
 }
 
 function updateCamType(){
