@@ -1,7 +1,7 @@
 # Place and Memory Interactive
 An interactive piece developed for the Place and Memory exhibition at [Phoenix Arts Center Leicester](https://www.phoenix.org.uk/art-at-phoenix/), April 2023
 
-Code by [me](adam-stephenson.co.uk)
+Code by [me](https://www.adam-stephenson.co.uk/)
 
 Exhibition curated by Irina Tsokova, created in collaboration with Martin Cibik, Sean Clark, Calum Vaughan and Iulia Radu
 
