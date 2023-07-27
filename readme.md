@@ -14,6 +14,6 @@ Installation version used WebUSB to connect to a [BBC Microbit V2](https://micro
 Installation also included another Microbit V2 connected via radio controlling an LED strip around the edge of the screen that lights up in reaction to collisions along the edge.
 
 ## How to use
-[Desktop version here]([https://place-and-memory.vercel.app/](https://place-and-memory-desktop.vercel.app/))
+[Desktop version here](https://place-and-memory.vercel.app/)
 
 Press U to enable UI and input.
